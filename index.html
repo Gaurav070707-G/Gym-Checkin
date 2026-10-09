@@ -322,7 +322,11 @@ input[type=file]{display:none}
       <div style="display:flex;flex-direction:column;gap:12px">
         <img id="prevImg" alt="Your gym photo">
         <div class="checks" id="checks"></div>
-        <button class="btn btn-cta" id="submitBtn" type="button">Submit check-in</button>
+        <div class="btn-row">
+          <button class="btn btn-cta" id="submitBtn" type="button">Submit check-in</button>
+          <label class="btn btn-ghost" id="retakeBtn" for="camInput">Retake photo</label>
+        </div>
+        <div class="muted" id="retakeHint" style="text-align:center">Photo blurry, or face or gym not clear? Retake it before submitting.</div>
       </div>
     </div>
   </section>
@@ -700,6 +704,11 @@ async function handleFile(file, mode){
       <div style="min-width:0"><div class="t">${esc(c.t)}</div><div class="d">${c.html?c.d:esc(c.d)}</div></div></div>`).join('');
   $('preview').hidden = false;
   $('submitBtn').hidden = !ok;
+  /* Retake opens the camera on phones; on a computer (or for gallery uploads) it picks another file */
+  const useCam = IS_PHONE && !fromGallery;
+  $('retakeBtn').setAttribute('for', useCam ? 'camInput' : 'galInput');
+  $('retakeBtn').textContent = ok ? (useCam ? 'Retake photo' : 'Choose another photo') : (useCam ? 'Take a new photo' : 'Choose another photo');
+  $('retakeHint').hidden = !ok;
   msg($('upMsg'), ok ? 'All checks passed. You can submit now.' : 'This photo cannot be accepted. See the reason above and take a new photo.', ok ? 'ok' : 'err');
   pending = ok ? { empId: session.empId, pin: session.pin, dataUrl, lat: loc.lat, lng: loc.lng, source, takenAt,
     mode: fromGallery ? 'gallery' : 'camera', dateFromPhoto: dateFromPhoto,
