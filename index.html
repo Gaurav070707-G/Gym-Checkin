@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Habuild Gym Check-in</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@800&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.js"></script>
+<style>
+/* Habuild brand tokens */
+:root{
+  --hb-ground:#f7feff; --hb-wash:#f8fdfb; --hb-surface:#ffffff; --hb-raised:#f5f8f9;
+  --hb-border:#d5dde1; --hb-chip:#e9eef1;
+  --hb-text:#1e2124; --hb-text-2:#4c545c; --hb-muted:#64727a; --hb-title:#141d22;
+  --hb-accent:#00af89; --hb-accent-text:#00776a; --hb-accent-soft:#e6f7f2; --hb-accent-line:#4fccae;
+  --hb-link:#007ac8; --hb-warm:#ff7b45; --hb-warm-text:#c04a20; --hb-warm-soft:#fff2ec;
+  --hb-cta-from:#007ac8; --hb-cta-to:#009378; --hb-on-cta:#ffffff;
+  --hb-success:#16a34a; --hb-critical:#f23028;
+  --hb-font:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --hb-font-label:"Plus Jakarta Sans","Inter",ui-sans-serif,system-ui,sans-serif;
+  --hb-r-md:8px; --hb-r-lg:16px; --hb-r-pill:999px;
+  --hb-logo-bg:#ffffff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme:dark;
+    --hb-ground:#141d22; --hb-wash:#132326; --hb-surface:#1b262c; --hb-raised:#253036;
+    --hb-border:#374349; --hb-chip:#253036;
+    --hb-text:#e9eef1; --hb-text-2:#b6c2c8; --hb-muted:#8b99a1; --hb-title:#f5f8f9;
+    --hb-accent:#4fccae; --hb-accent-text:#4fccae; --hb-accent-soft:#0f2e2c; --hb-accent-line:#005a5e;
+    --hb-link:#5cc0e2; --hb-warm:#ffa273; --hb-warm-text:#ffa273; --hb-warm-soft:#3a2219;
+    --hb-success:#4ade80; --hb-critical:#ff8880;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{
+  min-height:100vh;
+  background:linear-gradient(180deg,var(--hb-wash) 0,var(--hb-ground) 45%) var(--hb-ground);
+  color:var(--hb-text); font:400 15px/22px var(--hb-font); letter-spacing:-0.02em;
+  padding:32px 16px 48px;
+}
+.wrap{max-width:600px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.wrap.wide{max-width:960px}
+h1{font:800 28px/36px var(--hb-font);color:var(--hb-title);text-wrap:balance}
+h2{font:800 20px/28px var(--hb-font);color:var(--hb-title)}
+.sub{color:var(--hb-text-2)}
+.muted{color:var(--hb-muted);font-size:13px;line-height:18px}
+.hb-label{font:800 10px/13px var(--hb-font-label);letter-spacing:.08em;text-transform:uppercase;color:var(--hb-accent-text)}
+.card{background:var(--hb-surface);border:1px solid var(--hb-border);border-radius:var(--hb-r-lg);padding:20px;display:flex;flex-direction:column;gap:16px}
+.card--teal{background:
+  linear-gradient(var(--hb-accent-soft),var(--hb-accent-soft)) padding-box,
+  linear-gradient(135deg,var(--hb-accent-soft),var(--hb-accent-line)) border-box;
+  border:1px solid transparent}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-weight:600;font-size:14px;color:var(--hb-title)}
+select,input{
+  width:100%;padding:12px;border:1px solid var(--hb-border);border-radius:var(--hb-r-md);
+  background:var(--hb-surface);color:var(--hb-text);font:500 16px/22px var(--hb-font);
+}
+select:focus,input:focus{outline:2px solid var(--hb-accent-line);outline-offset:1px;border-color:var(--hb-accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border:0;
+  border-radius:var(--hb-r-pill);font:700 16px/22px var(--hb-font);cursor:pointer;text-decoration:none}
+.btn-cta{background:linear-gradient(90deg,var(--hb-cta-from),var(--hb-cta-to));color:var(--hb-on-cta)}
+.btn-ghost{background:var(--hb-chip);color:var(--hb-title)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:focus-visible,.link:focus-visible{outline:2px solid var(--hb-accent-text);outline-offset:2px}
+.btn-row{display:flex;gap:12px;flex-wrap:wrap}
+.btn-row .btn{flex:1 1 180px}
+.link{background:none;border:0;color:var(--hb-link);font:600 14px/20px var(--hb-font);cursor:pointer;text-decoration:none}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.who{display:flex;align-items:center;gap:12px;min-width:0}
+.avatar{width:44px;height:44px;border-radius:var(--hb-r-pill);flex:none;display:grid;place-items:center;
+  background:var(--hb-accent-soft);color:var(--hb-accent-text);font-weight:800}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:var(--hb-r-pill);
+  background:var(--hb-chip);color:var(--hb-text-2);font:600 12px/18px var(--hb-font);white-space:nowrap}
+.chip.ok{background:var(--hb-accent-soft);color:var(--hb-accent-text)}
+.chip.bad{background:var(--hb-warm-soft);color:var(--hb-warm-text)}
+.msg{padding:12px 16px;border-radius:var(--hb-r-md);font-weight:500}
+.msg.err{background:var(--hb-warm-soft);color:var(--hb-warm-text);border:1px solid var(--hb-warm)}
+.msg.ok{background:var(--hb-accent-soft);color:var(--hb-accent-text);border:1px solid var(--hb-accent-line)}
+.status{display:flex;align-items:center;gap:16px}
+.status .big{font:800 36px/40px var(--hb-font);color:var(--hb-accent-text);font-variant-numeric:tabular-nums}
+.preview img{width:100%;max-height:360px;object-fit:cover;border-radius:12px;display:block;background:var(--hb-raised)}
+.checks{display:grid;gap:8px}
+.check{display:flex;gap:12px;align-items:flex-start;padding:12px;background:var(--hb-raised);border-radius:var(--hb-r-md)}
+.check .mark{width:24px;height:24px;flex:none;border-radius:var(--hb-r-pill);display:grid;place-items:center;font-weight:800;font-size:13px}
+.check.pass .mark{background:var(--hb-accent-soft);color:var(--hb-accent-text)}
+.check.fail .mark{background:var(--hb-warm-soft);color:var(--hb-warm-text)}
+.check .t{font-weight:600;color:var(--hb-title)}
+.check .d{font-size:13px;color:var(--hb-text-2);font-variant-numeric:tabular-nums;word-break:break-word}
+/* calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal .dow{text-align:center;font:700 11px/16px var(--hb-font);color:var(--hb-muted)}
+.cal .day{aspect-ratio:1;max-width:100%;border-radius:10px;display:grid;place-items:center;font:600 13px/1 var(--hb-font);
+  background:var(--hb-raised);color:var(--hb-muted);font-variant-numeric:tabular-nums}
+.cal .day.done{background:var(--hb-accent);color:var(--hb-surface)}
+.cal .day.today{outline:2px solid var(--hb-accent-text);outline-offset:-2px;color:var(--hb-title)}
+.cal .day.done.today{color:var(--hb-surface)}
+.cal .day.future{opacity:.45}
+/* admin */
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat{background:var(--hb-raised);border-radius:12px;padding:12px 16px}
+.stat b{display:block;font:800 24px/32px var(--hb-font);color:var(--hb-title);font-variant-numeric:tabular-nums}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--hb-border);vertical-align:middle}
+th{font:700 12px/16px var(--hb-font);color:var(--hb-muted);text-transform:uppercase;letter-spacing:.04em}
+td.num{font-variant-numeric:tabular-nums;font-weight:700;color:var(--hb-title)}
+.bar{height:8px;border-radius:99px;background:var(--hb-chip);overflow:hidden;min-width:80px}
+.bar i{display:block;height:100%;background:var(--hb-accent);border-radius:99px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:8px 0 12px}
+.pcard{border:1px solid var(--hb-border);border-radius:12px;overflow:hidden;background:var(--hb-surface);display:flex;flex-direction:column;min-width:0}
+.pcard.flag{border-color:var(--hb-warm)}
+.pcard.rej img{opacity:.4}
+.pcard img{width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--hb-raised);display:block}
+.pcard .pb{padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:18px}
+.pcard .pt{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;color:var(--hb-title)}
+.flagtxt{color:var(--hb-warm-text);font-size:12px;line-height:16px}
+.pact{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px}
+.gymline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--hb-text-2)}
+.help{background:var(--hb-raised);border-radius:var(--hb-r-md);padding:12px 16px;font-size:13px;line-height:20px;color:var(--hb-text-2)}
+.help ol{padding-left:18px;display:grid;gap:2px}
+.gedit{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;align-items:end;padding:8px 0 12px}
+.acts{display:flex;gap:12px;flex-wrap:wrap}
+.btn-sm{padding:6px 14px;font-size:13px;line-height:18px}
+.spinner{width:18px;height:18px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spinner{animation-duration:3s}}
+input[type=file]{display:none}
+.locbox{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border-radius:var(--hb-r-md);font-size:14px;line-height:20px;
+  background:var(--hb-raised);color:var(--hb-text-2)}
+.locbox.ok{background:var(--hb-accent-soft);color:var(--hb-accent-text)}
+.locbox.bad{background:var(--hb-warm-soft);color:var(--hb-warm-text);border:1px solid var(--hb-warm)}
+.btn.off{opacity:.45;pointer-events:none}
+.gal{display:flex;flex-direction:column;gap:4px;text-align:center}
+.gal .link{cursor:pointer;text-decoration:underline}
+.opt{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--hb-border);border-radius:12px}
+.opt-h{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--hb-title)}
+.opt-n{width:24px;height:24px;flex:none;border-radius:var(--hb-r-pill);display:grid;place-items:center;
+  background:var(--hb-accent-soft);color:var(--hb-accent-text);font-size:13px}
+.confirm{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:12px;background:var(--hb-accent-soft);border:1px solid var(--hb-accent-line)}
+.confirm strong{color:var(--hb-title)}
+.brand{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.logo{height:40px;width:auto;max-width:180px;object-fit:contain;display:block;
+  background:var(--hb-logo-bg);padding:6px 12px;border-radius:var(--hb-r-md)}
+.brand-sm{margin-bottom:0}
+.brand-sm .logo{height:30px;padding:4px 10px}
+@media (max-width:640px){
+  table{min-width:0}
+  thead{display:none}
+  tbody tr.emp{display:grid;grid-template-columns:1fr auto;grid-template-areas:"name status" "dept days" "bar bar" "act act";
+    gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--hb-border)}
+  tbody tr.emp td{border:0;padding:0}
+  .c-name{grid-area:name}.c-dept{grid-area:dept;color:var(--hb-text-2);font-size:13px}
+  .c-days{grid-area:days;text-align:right}.c-days::after{content:" days";font-weight:500;color:var(--hb-muted)}
+  .c-bar{grid-area:bar}.c-status{grid-area:status;text-align:right}.c-act{grid-area:act}
+  tbody tr.vrow:not([hidden]){display:block}
+  tbody tr.vrow td{display:block;padding:0 0 8px}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<main class="wrap" id="viewLogin">
+  <header>
+    <div class="brand"><img class="logo" src="https://assets.habit.yoga/habuildassets/hbin-logo.png" alt="Habuild" onerror="this.hidden=true"><span class="hb-label">Gym Benefit</span></div>
+    <h1>Gym Check-in</h1>
+    <p class="sub">Upload one photo from your gym every day. The photo must be taken today, at your gym.</p>
+  </header>
+  <form class="card" id="loginForm">
+    <div class="field">
+      <label for="dept">Department</label>
+      <select id="dept" required><option value="">Loading…</option></select>
+    </div>
+    <div class="field">
+      <label for="emp">Your name</label>
+      <select id="emp" required disabled><option value="">Select a department first</option></select>
+    </div>
+    <div class="field">
+      <label for="pin">PIN</label>
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="4-digit PIN (from HR)" required>
+    </div>
+    <div class="msg err" id="loginMsg" hidden></div>
+    <button class="btn btn-cta" id="loginBtn" type="submit">Login</button>
+  </form>
+  <p class="muted" style="text-align:center">HR / Finance? <button class="link" id="toAdmin" type="button">Open admin report</button></p>
+</main>
+
+<!-- ============ EMPLOYEE HOME ============ -->
+<main class="wrap" id="viewHome" hidden>
+  <div class="brand brand-sm"><img class="logo" src="https://assets.habit.yoga/habuildassets/hbin-logo.png" alt="Habuild" onerror="this.hidden=true"></div>
+  <div class="topbar">
+    <div class="who">
+      <div class="avatar" id="avatar">–</div>
+      <div style="min-width:0">
+        <h2 id="hName">–</h2>
+        <div class="muted" id="hDept">–</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost" id="logoutBtn" type="button">Logout</button>
+  </div>
+
+  <section class="card card--teal" id="statusCard">
+    <div class="status">
+      <div class="big" id="monthCount">0</div>
+      <div>
+        <div class="t" style="font-weight:700;color:var(--hb-title)" id="monthLabel">days this month</div>
+        <div class="muted" id="todayLine">Today's check-in is pending</div>
+      </div>
+    </div>
+    <div class="gymline" id="gymLine" hidden></div>
+  </section>
+
+  <form class="card" id="gymCard" hidden>
+    <div>
+      <span class="hb-label">One-time setup</span>
+      <h2>Register your gym</h2>
+      <p class="muted">Your check-in photos must be taken at this gym. If you change gyms later, HR/admin will update it.</p>
+    </div>
+    <div class="field">
+      <label for="gName">Gym name</label>
+      <input id="gName" type="text" placeholder="e.g. Gold's Gym, Andheri West" required>
+    </div>
+
+    <div class="opt">
+      <div class="opt-h"><span class="opt-n">1</span> Best: you are at your gym right now</div>
+      <button class="btn btn-cta" id="gHere" type="button">Use my current location</button>
+    </div>
+
+    <div class="opt">
+      <div class="opt-h"><span class="opt-n">2</span> Or paste the gym's Google Maps link</div>
+      <div class="field">
+        <label for="gLink">Google Maps link or coordinates</label>
+        <input id="gLink" type="text" inputmode="url" placeholder="https://maps.app.goo.gl/...">
+      </div>
+      <button class="btn btn-ghost" id="gFind" type="button">Find on map</button>
+      <div class="help">
+        <strong>How to get the link</strong>
+        <ol>
+          <li>Open the Google Maps app and search for your gym.</li>
+          <li>Open the gym's own page (with its name and photos), tap <b>Share</b>, then <b>Copy link</b>.</li>
+          <li>Paste the link above and tap <b>Find on map</b>.</li>
+        </ol>
+        Gym not listed on Maps? Long-press the gym's exact spot on the map, copy the coordinates shown at the top (e.g. 19.0760, 72.8777) and paste them.
+      </div>
+    </div>
+
+    <div class="confirm" id="gConfirm" hidden>
+      <strong>Is this your gym?</strong>
+      <div id="gFound" class="muted"></div>
+      <div class="btn-row">
+        <button class="btn btn-cta" id="gBtn" type="submit">Yes, save this gym</button>
+        <button class="btn btn-ghost" id="gRetry" type="button">No, try again</button>
+      </div>
+    </div>
+    <div class="msg err" id="gMsg" hidden></div>
+  </form>
+
+  <section class="card" id="uploadCard">
+    <div>
+      <span class="hb-label">Today's check-in</span>
+      <h2>Upload your gym photo</h2>
+      <p class="muted" id="gymHint"></p>
+    </div>
+    <div class="msg ok" style="font-size:14px">Take a mirror photo at the gym with your back camera. Your face and the gym (machines/weights) must both be clearly visible. Admins can see every photo.</div>
+    <div class="msg err" id="desktopNote" hidden>To take a photo, open this link on your phone. On a computer you can only upload an original photo that has its date and location saved inside it.</div>
+    <div class="locbox" id="locBox" hidden>
+      <span id="locText">Checking your location…</span>
+      <button class="btn btn-ghost btn-sm" id="locRetry" type="button" hidden>Check location again</button>
+    </div>
+    <div class="btn-row" id="camRow">
+      <label class="btn btn-cta" for="camInput" id="camBtn">Take photo</label>
+    </div>
+    <input type="file" id="camInput" accept="image/*" capture="environment">
+    <div class="gal" id="galRow">
+      <label class="link" for="galInput">Took the photo earlier? Upload it from your gallery</label>
+      <div class="muted">Only accepted if the original photo has today's date and the gym location saved inside it. Edited, forwarded or screenshot photos will not work.</div>
+    </div>
+    <input type="file" id="galInput" accept="image/jpeg,image/heic,image/*">
+    <div class="msg" id="upMsg" hidden></div>
+
+    <div class="preview" id="preview" hidden>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <img id="prevImg" alt="Your gym photo">
+        <div class="checks" id="checks"></div>
+        <button class="btn btn-cta" id="submitBtn" type="button">Submit check-in</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="topbar">
+      <h2 id="calTitle">This month</h2>
+      <span class="chip ok">● = gym day</span>
+    </div>
+    <div class="cal" id="cal"></div>
+  </section>
+</main>
+
+<!-- ============ ADMIN ============ -->
+<main class="wrap wide" id="viewAdmin" hidden>
+  <div class="topbar">
+    <div>
+      <div class="brand"><img class="logo" src="https://assets.habit.yoga/habuildassets/hbin-logo.png" alt="Habuild" onerror="this.hidden=true"><span class="hb-label">Admin</span></div>
+      <h1>Gym Attendance Report</h1>
+    </div>
+    <button class="btn btn-ghost" id="adminBack" type="button">← Back</button>
+  </div>
+
+  <form class="card" id="adminForm">
+    <div class="filters">
+      <div class="field"><label for="aPin">Admin PIN</label><input id="aPin" type="password" inputmode="numeric" required></div>
+      <div class="field"><label for="aMonth">Month</label><input id="aMonth" type="month" required></div>
+      <div class="field"><label for="aDept">Department</label><select id="aDept"><option value="">All departments</option></select></div>
+      <button class="btn btn-cta" type="submit" id="aBtn">View report</button>
+    </div>
+    <div class="msg err" id="aMsg" hidden></div>
+  </form>
+
+  <section class="card" id="aResult" hidden>
+    <div class="stats" id="aStats"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Employee</th><th>Department</th><th>Days</th><th style="width:30%">Progress</th><th>Status</th><th></th></tr></thead>
+        <tbody id="aBody"></tbody>
+      </table>
+    </div>
+    <p class="muted">All data is in the "Attendance" tab of the Google Sheet. Photos are in the Drive folder "Gym Attendance Photos", organised by month → date → department.</p>
+  </section>
+</main>
+
+<script>
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+/* ===== SETTING: paste your Apps Script Web app URL (ending in /exec) between the quotes ===== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbwmi2F_QZr1zNEEws0asbIPQWGzPa6mQRyvZgWY_0sIDIBXbx9j4eoTlRaW3ORAGk3hsQ/exec';
+
+/* Inside Apps Script the page talks to the server with google.script.run.
+   Hosted anywhere else (Netlify, your own website) it uses the JSON API at API_URL,
+   which needs no Google login, so phones with several Google accounts open it normally. */
+const IN_APPS_SCRIPT = !!(window.google && google.script && google.script.run);
+const call = (fn, ...args) => new Promise((res, rej) => {
+  const t = setTimeout(() => rej('The server did not respond. Please check your internet and refresh the page.'), 60000);
+  const done = (ok, v) => { clearTimeout(t); ok ? res(v) : rej(v); };
+  if (IN_APPS_SCRIPT) {
+    try {
+      google.script.run
+        .withSuccessHandler(r => done(true, r))
+        .withFailureHandler(e => done(false, e && e.message ? e.message : String(e)))[fn](...args);
+    } catch(e){ done(false, 'Could not reach the server: ' + (e && e.message ? e.message : e)); }
+    return;
+  }
+  if (API_URL.indexOf('https') !== 0) return done(false, 'Setup needed: API_URL is not set in the page code.');
+  fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn: fn, args: args }),
+    redirect: 'follow',
+    credentials: 'omit'
+  })
+    .then(r => r.json())
+    .then(d => d && d.ok ? done(true, d.result) : done(false, (d && d.error) || 'Unknown server error.'))
+    .catch(() => done(false, 'Could not reach the server. Please check your internet and try again.'));
+});
+/* Show unexpected script errors on screen (helps troubleshooting) */
+window.addEventListener('error', e => {
+  const box = document.getElementById('loginMsg');
+  if (box && !document.getElementById('viewLogin').hidden){ box.textContent = 'Error: ' + e.message; box.className = 'msg err'; box.hidden = false; }
+});
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
+function show(view){ ['viewLogin','viewHome','viewAdmin'].forEach(v => $(v).hidden = v !== view); window.scrollTo(0,0); }
+function msg(el, text, type){ el.textContent = text; el.className = 'msg ' + type; el.hidden = !text; }
+function busy(btn, on, label){
+  if (on){ btn.dataset.l = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>' + (label||''); }
+  else { btn.disabled = false; if (btn.dataset.l) btn.innerHTML = btn.dataset.l; }
+}
+/* HTML-escape text. Written without quote characters inside the regex, which Apps Script's HTML service can misread. */
+const ESC_MAP = { '&': '&' + 'amp;', '<': '&' + 'lt;', '>': '&' + 'gt;', '\x22': '&' + 'quot;', '\x27': '&' + '#39;' };
+function esc(s){ return String(s).replace(/[&<>\x22\x27]/g, function(c){ return ESC_MAP[c]; }); }
+const MAPS_URL = 'https:' + '/' + '/www.google.com/maps?q=';
+/* Date to yyyy-MM-dd HH:mm:ss in IST */
+function istString(d){
+  const p = {}; new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(d).forEach(x => p[x.type] = x.value);
+  return `${p.year}-${p.month}-${p.day} ${p.hour === '24' ? '00' : p.hour}:${p.minute}:${p.second}`;
+}
+/* yyyy-MM-dd HH:mm:ss to a readable date like 8 Oct 2026, 7:42 am */
+function niceDate(s){
+  const d = new Date(s.replace(' ','T'));
+  return isNaN(d) ? s : d.toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
+}
+function haversine(a,b,c,d){ const R=6371000,r=x=>x*Math.PI/180,dl=r(c-a),dn=r(d-b);
+  const h=Math.sin(dl/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dn/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+const fmtDist = m => m >= 1000 ? (m/1000).toFixed(1)+' km' : Math.round(m)+' m';
+
+/* ---------- state ---------- */
+let directory = { depts:[], employees:[] };
+let session = null; /* {empId, pin} */
+let me = null; /* profile from server */
+let pending = null; /* photo waiting for submit */
+
+/* ---------- LOGIN ---------- */
+async function loadDirectory(){
+  try {
+    directory = await call('getDirectory');
+    $('dept').innerHTML = '<option value="">Select department</option>' +
+      directory.depts.map(d => `<option>${esc(d)}</option>`).join('');
+    $('aDept').innerHTML = '<option value="">All departments</option>' +
+      directory.depts.map(d => `<option>${esc(d)}</option>`).join('');
+  } catch(e){
+    $('dept').innerHTML = '<option value="">Could not load</option>';
+    msg($('loginMsg'), 'Could not load the employee list: ' + e, 'err');
+  }
+}
+$('dept').addEventListener('change', () => {
+  const list = directory.employees.filter(e => e.dept === $('dept').value).sort((a,b)=>a.name.localeCompare(b.name));
+  $('emp').disabled = !list.length;
+  $('emp').innerHTML = list.length
+    ? '<option value="">Select your name</option>' + list.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')
+    : '<option value="">Select a department first</option>';
+});
+$('loginForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const empId = $('emp').value, pin = $('pin').value.trim();
+  if (!empId) return msg($('loginMsg'), 'Please select your name.', 'err');
+  busy($('loginBtn'), true, ' Logging in…'); msg($('loginMsg'), '', 'err');
+  try {
+    me = await call('login', empId, pin);
+    session = { empId, pin }; store.set('gymSession', session);
+    renderHome();
+    show('viewHome');
+  } catch(e){ msg($('loginMsg'), e, 'err'); }
+  busy($('loginBtn'), false);
+});
+$('logoutBtn').addEventListener('click', () => { store.del('gymSession'); session = me = null; $('pin').value=''; resetUpload(); show('viewLogin'); });
+
+/* ---------- HOME ---------- */
+function renderHome(){
+  $('hName').textContent = me.name;
+  $('hDept').textContent = me.dept + ' · ' + me.id;
+  $('avatar').textContent = me.name.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  $('monthCount').textContent = me.monthDates.length;
+  const monthName = new Date(me.today + 'T00:00').toLocaleString('en-IN',{month:'long'});
+  $('monthLabel').textContent = (me.monthDates.length === 1 ? 'gym day' : 'gym days') + ' in ' + monthName;
+  $('todayLine').textContent = me.todayDone ? `✓ Checked in today (${me.todayTime})` : 'Today\'s check-in is pending';
+  $('gymCard').hidden = me.gymSet;
+  $('gymCard').querySelector('p.muted').textContent = `Your check-in photos must be taken within ${me.radius} m of this gym. If you change gyms later, HR/admin will update it.`;
+  $('uploadCard').hidden = me.todayDone || !me.gymSet;
+  $('camRow').hidden = !IS_PHONE; $('galRow').hidden = false;
+  if (!$('uploadCard').hidden) checkLocation();
+  $('gymHint').textContent = `The photo must be taken today, within ${me.radius} m of ${me.gymName || 'your gym'}.`;
+  $('gymLine').hidden = !me.gymSet;
+  if (me.gymSet) $('gymLine').innerHTML = `My gym: <strong>${esc(me.gymName || 'Registered gym')}</strong>
+    <a class="link" href="${MAPS_URL}${me.gymLat},${me.gymLng}" target="_blank" rel="noopener">Map</a>
+    <span class="muted">(contact HR to change)</span>`;
+  renderCalendar();
+}
+function renderCalendar(){
+  const [y,m] = me.month.split('-').map(Number);
+  const first = new Date(y, m-1, 1), days = new Date(y, m, 0).getDate();
+  const done = new Set(me.monthDates.map(d => +d.slice(8)));
+  const todayN = +me.today.slice(8);
+  $('calTitle').textContent = first.toLocaleString('en-IN',{month:'long',year:'numeric'});
+  let html = ['S','M','T','W','T','F','S'].map(d=>`<div class="dow">${d}</div>`).join('');
+  for (let i=0;i<first.getDay();i++) html += '<div></div>';
+  for (let d=1; d<=days; d++){
+    const cls = ['day', done.has(d)?'done':'', d===todayN?'today':'', d>todayN?'future':''].join(' ');
+    html += `<div class="${cls}" title="${d}">${d}</div>`;
+  }
+  $('cal').innerHTML = html;
+}
+
+/* ---------- PHOTO READ + CHECKS ---------- */
+$('camInput').addEventListener('change', e => { handleFile(e.target.files[0], 'camera'); e.target.value=''; });
+$('galInput').addEventListener('change', e => { handleFile(e.target.files[0], 'gallery'); e.target.value=''; });
+/* Check-in only from a phone: laptops ignore the camera setting and open a file picker instead. */
+const IS_PHONE = (navigator.userAgentData && navigator.userAgentData.mobile) ||
+  /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+$('desktopNote').hidden = IS_PHONE;
+$('camRow').hidden = !IS_PHONE;
+if (!IS_PHONE) $('galInput').removeAttribute('capture');
+
+function resetUpload(){ pending = null; $('preview').hidden = true; msg($('upMsg'),'','ok'); }
+
+function readExif(file){
+  return new Promise(res => {
+    try {
+      EXIF.getData(file, function(){ res(EXIF.getAllTags(this) || {}); });
+    } catch(e){ res({}); }
+    setTimeout(() => res({}), 8000);
+  });
+}
+function exifGps(t){
+  const conv = (dms, ref) => { if (!dms || dms.length < 3) return null;
+    let v = Number(dms[0]) + Number(dms[1])/60 + Number(dms[2])/3600;
+    if (ref === 'S' || ref === 'W') v = -v; return isFinite(v) ? v : null; };
+  const lat = conv(t.GPSLatitude, t.GPSLatitudeRef), lng = conv(t.GPSLongitude, t.GPSLongitudeRef);
+  return (lat === null || lng === null || (lat === 0 && lng === 0)) ? null : { lat, lng };
+}
+function deviceLocation(){
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej('This browser does not support location.');
+    navigator.geolocation.getCurrentPosition(
+      p => res({ lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy }),
+      err => {
+        if (err && err.code === 1) rej('Location permission is blocked for this website. Tap the lock or settings icon next to the web address, open Permissions, set Location to Allow, then tap Check location again.');
+        else if (err && err.code === 2) rej('Your phone\'s Location (GPS) is turned off. Swipe down from the top of the screen, turn on Location, then tap Check location again.');
+        else rej('Could not get your location in time. Move near a window or outside, then tap Check location again.');
+      },
+      { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+  });
+}
+function compress(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const max = 1280, s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth*s); c.height = Math.round(img.naturalHeight*s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => rej('Could not open this photo. Please try a JPEG photo.');
+    img.src = url;
+  });
+}
+
+async function handleFile(file, mode){
+  const fromGallery = mode === 'gallery';
+  if (!file) return;
+  resetUpload();
+  if (String(file.type).indexOf('image') !== 0) return msg($('upMsg'), 'Please upload a photo (image file).', 'err');
+  msg($('upMsg'), 'Checking photo…', 'ok');
+
+  const tags = await readExif(file);
+  const checks = [];
+  let ok = true;
+
+  /* 1) Date and time. The photo's own EXIF date is trusted. Without it, the file time is used,
+     but then the photo only counts if it is uploaded right away, at the gym. */
+  let takenAt = null, dateFromPhoto = false;
+  const exifDate = tags.DateTimeOriginal || tags.DateTimeDigitized || tags.DateTime;
+  if (exifDate && /^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}/.test(exifDate)) {
+    takenAt = exifDate.slice(0,10).replace(/:/g,'-') + exifDate.slice(10,19); dateFromPhoto = true;
+  } else if (!fromGallery && file.lastModified && Date.now() - file.lastModified < 15*60*1000) {
+    takenAt = istString(new Date(file.lastModified));
+  }
+  if (!takenAt){
+    ok = false; checks.push({pass:false, t:'No date/time saved inside this photo',
+      d: fromGallery
+        ? 'Gallery photos are only accepted if the original photo has its date saved inside it. This one does not (edited, forwarded, downloaded or screenshot photos lose it).'
+        : 'This photo has no date saved inside it. Take a new photo at the gym with the Take photo button.'});
+  } else if (takenAt.slice(0,10) !== me.today){
+    ok = false; checks.push({pass:false, t:'Photo is not from today', d:'This photo was taken on ' + niceDate(takenAt) + '. Only photos taken today are accepted.'});
+  } else if (dateFromPhoto) {
+    checks.push({pass:true, t:'Taken today', d: niceDate(takenAt) + ' (date saved in the photo)'});
+  } else {
+    checks.push({pass:true, t:'Taken today', d:'This photo has no date inside it, so the file time is used: ' + niceDate(takenAt)});
+  }
+
+  /* 2) Location. If the photo has GPS inside it, that is where it was taken, so it can be uploaded
+     any time until midnight, from anywhere. If not, only the phone's current location is available,
+     so the upload must happen at the gym. */
+  const exifLoc = exifGps(tags);
+  let live = null, liveErr = '';
+  msg($('upMsg'), 'Getting your phone\'s location…', 'ok');
+  try { live = await deviceLocation(); } catch(e){ liveErr = e; }
+  const loc = fromGallery ? exifLoc : (exifLoc || live), source = exifLoc ? 'EXIF' : 'DEVICE';
+  if (!loc && fromGallery){
+    ok = false;
+    checks.push({pass:false, t:'No location saved inside this photo',
+      d:'Gallery photos are only accepted if the original photo has the gym location saved inside it. Turn on the location tag in your camera settings, or use Take photo at the gym.'});
+  } else if (!loc){
+    ok = false;
+    checks.push({pass:false, t:'No location found',
+      d:'This photo has no location inside it, and your phone location is not available (' + (liveErr || 'Location is off') + ').'});
+  }
+  if (loc){
+    const link = MAPS_URL + loc.lat + ',' + loc.lng;
+    const accTxt = loc.acc ? ' · accuracy ±' + Math.round(loc.acc) + ' m' : '';
+    checks.push({pass:true,
+      t: source === 'EXIF' ? 'Location saved in the photo' : 'Photo has no location inside it, so your current location is used',
+      d: loc.lat.toFixed(6) + ', ' + loc.lng.toFixed(6) + accTxt + ' · <a class="link" href="' + link + '" target="_blank" rel="noopener">View map</a>', html:true});
+
+    /* 3) Gym distance */
+    if (me.gymSet){
+      const dist = haversine(loc.lat, loc.lng, me.gymLat, me.gymLng);
+      if (dist > me.radius){
+        ok = false;
+        checks.push({pass:false, t:'Too far from gym', d: source === 'EXIF'
+          ? 'This photo was taken ' + fmtDist(dist) + ' from your gym. The limit is ' + me.radius + ' m.'
+          : 'You are ' + fmtDist(dist) + ' from your gym right now. Because this photo has no location inside it, it can only be uploaded while you are at the gym. ' +
+            'Next time, upload it at the gym right after taking it, or keep your phone camera\'s location tag ON so you can upload later in the day.'});
+      } else {
+        checks.push({pass:true, t:'At your gym', d: fmtDist(dist) + ' from your gym'});
+      }
+    } else {
+      ok = false; checks.push({pass:false, t:'Gym not registered', d:'Please register your gym first.'});
+    }
+  }
+
+  let dataUrl;
+  try { dataUrl = await compress(file); } catch(e){ return msg($('upMsg'), e, 'err'); }
+
+  $('prevImg').src = dataUrl;
+  $('checks').innerHTML = checks.map(c => `<div class="check ${c.pass?'pass':'fail'}">
+      <div class="mark">${c.pass?'✓':'✕'}</div>
+      <div style="min-width:0"><div class="t">${esc(c.t)}</div><div class="d">${c.html?c.d:esc(c.d)}</div></div></div>`).join('');
+  $('preview').hidden = false;
+  $('submitBtn').hidden = !ok;
+  msg($('upMsg'), ok ? 'All checks passed. You can submit now.' : 'This photo cannot be accepted. See the reason above and take a new photo.', ok ? 'ok' : 'err');
+  pending = ok ? { empId: session.empId, pin: session.pin, dataUrl, lat: loc.lat, lng: loc.lng, source, takenAt,
+    mode: fromGallery ? 'gallery' : 'camera', dateFromPhoto: dateFromPhoto,
+    live: live ? { lat: live.lat, lng: live.lng, acc: live.acc } : null } : null;
+}
+
+$('submitBtn').addEventListener('click', async () => {
+  if (!pending) return;
+  busy($('submitBtn'), true, ' Uploading…');
+  try {
+    me = await call('uploadPhoto', pending);
+    resetUpload();
+    renderHome();
+    msg($('upMsg'), me.message, 'ok');
+    $('uploadCard').hidden = false; $('preview').hidden = true;
+    $('camRow').hidden = true; $('galRow').hidden = true; $('locBox').hidden = true;
+    $('gymHint').textContent = '';
+  } catch(e){ msg($('upMsg'), e, 'err'); }
+  busy($('submitBtn'), false);
+});
+
+/* ---------- LOCATION PRE-CHECK (before the camera opens) ---------- */
+let locChecking = false;
+async function checkLocation(){
+  if (!IS_PHONE || locChecking) return;
+  locChecking = true;
+  const box = $('locBox');
+  box.hidden = false; box.className = 'locbox';
+  $('locText').textContent = 'Checking your location… If your phone asks, tap Allow.';
+  $('locRetry').hidden = true;
+  $('camBtn').classList.add('off');
+  try {
+    const p = await deviceLocation();
+    box.className = 'locbox ok';
+    $('locText').textContent = '✓ Location is on' + (p.acc ? ' (accuracy ' + Math.round(p.acc) + ' m)' : '') + '. You can take your photo.';
+    $('camBtn').classList.remove('off');
+  } catch(e){
+    box.className = 'locbox bad';
+    $('locText').textContent = e;
+    $('locRetry').hidden = false;
+  }
+  locChecking = false;
+}
+$('locRetry').addEventListener('click', checkLocation);
+
+/* ---------- GYM REGISTRATION (pick location, confirm, then save) ---------- */
+let pendingGym = null;
+function showGymConfirm(g){
+  pendingGym = g;
+  const url = MAPS_URL + g.lat + ',' + g.lng;
+  let note = '';
+  if (g.mode === 'here') note = 'Your current location' + (g.acc ? ' (accuracy ' + Math.round(g.acc) + ' m)' : '') + '.';
+  else if (g.precise) note = 'Location read from your link.';
+  else note = 'Warning: this link only gives an approximate map area, not the exact gym. Check the map carefully, or use your current location at the gym instead.';
+  $('gFound').innerHTML = esc(note) + '<br><span style="font-variant-numeric:tabular-nums">' + g.lat.toFixed(6) + ', ' + g.lng.toFixed(6) + '</span> · ' +
+    '<a class="link" href="' + url + '" target="_blank" rel="noopener">Open in Google Maps to check</a>';
+  $('gConfirm').hidden = false;
+  $('gConfirm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function resetGymConfirm(){ pendingGym = null; $('gConfirm').hidden = true; }
+$('gRetry').addEventListener('click', resetGymConfirm);
+$('gLink').addEventListener('input', resetGymConfirm);
+
+$('gHere').addEventListener('click', async () => {
+  msg($('gMsg'), '', 'err'); resetGymConfirm();
+  busy($('gHere'), true, ' Getting your location…');
+  try {
+    const p = await deviceLocation();
+    if (p.acc && p.acc > 150) throw 'Your location is not accurate enough (' + Math.round(p.acc) + ' m). Step outside or near a window and try again.';
+    showGymConfirm({ mode: 'here', lat: p.lat, lng: p.lng, acc: p.acc });
+  } catch(e){ msg($('gMsg'), e, 'err'); }
+  busy($('gHere'), false);
+});
+
+$('gFind').addEventListener('click', async () => {
+  msg($('gMsg'), '', 'err'); resetGymConfirm();
+  const link = $('gLink').value.trim();
+  if (!link) return msg($('gMsg'), 'Paste the Google Maps link first.', 'err');
+  busy($('gFind'), true, ' Reading link…');
+  try {
+    const r = await call('previewGymLink', session.empId, session.pin, link);
+    showGymConfirm({ mode: 'link', link: link, lat: r.lat, lng: r.lng, precise: r.precise });
+  } catch(e){ msg($('gMsg'), e, 'err'); }
+  busy($('gFind'), false);
+});
+
+$('gymCard').addEventListener('submit', async ev => {
+  ev.preventDefault(); msg($('gMsg'), '', 'err');
+  if (!pendingGym) return msg($('gMsg'), 'Choose a location first.', 'err');
+  if ($('gName').value.trim().length < 3) return msg($('gMsg'), 'Please enter the full gym name.', 'err');
+  busy($('gBtn'), true, ' Saving…');
+  try {
+    const loc = pendingGym.mode === 'here'
+      ? { mode: 'here', lat: pendingGym.lat, lng: pendingGym.lng, acc: pendingGym.acc }
+      : { mode: 'link', link: pendingGym.link };
+    me = await call('registerGym', session.empId, session.pin, $('gName').value.trim(), loc);
+    resetGymConfirm(); renderHome(); msg($('upMsg'), me.message, 'ok');
+  } catch(e){ msg($('gMsg'), e, 'err'); }
+  busy($('gBtn'), false);
+});
+
+/* ---------- ADMIN ---------- */
+$('toAdmin').addEventListener('click', () => {
+  const now = istString(new Date()); $('aMonth').value = now.slice(0,7); show('viewAdmin');
+});
+$('adminBack').addEventListener('click', () => show(session ? 'viewHome' : 'viewLogin'));
+$('adminForm').addEventListener('submit', async ev => {
+  ev.preventDefault(); msg($('aMsg'),'','err'); busy($('aBtn'), true, ' Loading…');
+  try { Object.keys(photoCache).forEach(k => delete photoCache[k]); renderReport(await call('adminReport', $('aPin').value.trim(), $('aMonth').value, $('aDept').value)); }
+  catch(e){ msg($('aMsg'), e, 'err'); $('aResult').hidden = true; }
+  busy($('aBtn'), false);
+});
+let report = null;
+const photoCache = {}; /* empId -> photos list */
+const openRows = new Set();
+
+function recalc(x){
+  x.days = x.visits.filter(v => !v.rejected).length;
+  x.flagged = x.visits.filter(v => v.flags.length && !v.rejected).length;
+  x.eligible = x.days >= report.minDays;
+}
+function renderReport(r){
+  report = r;
+  const eligible = r.rows.filter(x => x.eligible).length;
+  const zero = r.rows.filter(x => x.days === 0).length;
+  const sus = r.rows.reduce((s,x) => s + x.flagged, 0);
+  $('aStats').innerHTML = [
+    ['Employees', r.rows.length], [`Eligible (≥ ${r.minDays} days)`, eligible], ['Zero days', zero], ['⚠ Suspicious entries', sus]
+  ].map(([k,v]) => `<div class="stat"><span class="muted">${k}</span><b>${v}</b></div>`).join('');
+  $('aBody').innerHTML = r.rows.map((x,i) => `
+    <tr class="emp">
+      <td class="c-name"><strong>${esc(x.name)}</strong><div class="muted">${esc(x.id)}</div>
+        <div class="muted">${x.gymSet
+          ? `Gym: ${esc(x.gymName || '—')} · <a class="link" style="font-size:13px" href="${MAPS_URL}${x.gymLat},${x.gymLng}" target="_blank" rel="noopener">Map</a>${x.gymBy ? ' · set by ' + esc(x.gymBy) : ''}`
+          : '<span style="color:var(--hb-warm-text)">Gym not registered</span>'}</div>
+        ${x.flagged ? `<span class="chip bad" style="margin-top:4px">⚠ ${x.flagged} suspicious</span>` : ''}</td>
+      <td class="c-dept">${esc(x.dept)}</td>
+      <td class="num c-days">${x.days}</td>
+      <td class="c-bar"><div class="bar"><i style="width:${Math.min(100, x.days/r.minDays*100)}%"></i></div></td>
+      <td class="c-status">${x.eligible ? '<span class="chip ok">Eligible</span>' : `<span class="chip bad">${Math.max(0,r.minDays-x.days)} days short</span>`}</td>
+      <td class="c-act"><div class="acts">${x.visits.length ? `<button class="link" type="button" data-i="${i}">${openRows.has(x.id)?'Hide':'Photos'}</button>` : ''}
+        <button class="link" type="button" data-g="${i}">Change gym</button></div></td>
+    </tr>
+    <tr class="vrow" hidden id="e${i}"><td colspan="6">
+      <div class="gedit">
+        <div class="field"><label for="en${i}">New gym name</label><input id="en${i}" type="text" value="${esc(x.gymName||'')}"></div>
+        <div class="field"><label for="el${i}">Google Maps link or "lat, lng"</label><input id="el${i}" type="text" placeholder="https://maps.app.goo.gl/..."></div>
+        <div class="acts"><button class="btn btn-cta btn-sm" type="button" data-gs="${i}">Save</button>
+          ${x.gymSet ? `<button class="btn btn-ghost btn-sm" type="button" data-gr="${i}">Reset (employee re-registers)</button>` : ''}</div>
+      </div>
+      <div class="msg err" id="em${i}" hidden></div>
+    </td></tr>
+    <tr class="vrow" ${openRows.has(x.id)?'':'hidden'} id="v${i}"><td colspan="6"><div class="pgrid" id="g${i}"></div></td></tr>`
+  ).join('') || '<tr><td colspan="6" class="muted">No employees match this filter.</td></tr>';
+  r.rows.forEach((x,i) => { if (openRows.has(x.id)) renderPhotos(i); });
+  $('aBody').querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.i, x = r.rows[i], row = $('v' + i);
+    row.hidden = !row.hidden; b.textContent = row.hidden ? 'Photos' : 'Hide';
+    row.hidden ? openRows.delete(x.id) : (openRows.add(x.id), renderPhotos(i));
+  }));
+  $('aBody').querySelectorAll('button[data-g]').forEach(b => b.addEventListener('click', () => {
+    const row = $('e' + b.dataset.g); row.hidden = !row.hidden;
+  }));
+  const saveGym = async (i, reset, btn) => {
+    const x = r.rows[i]; busy(btn, true); msg($('em'+i), '', 'err');
+    try {
+      const res = await call('adminSetGym', $('aPin').value.trim(), x.id, reset ? '' : $('en'+i).value.trim(), reset ? '' : $('el'+i).value.trim());
+      if (res.reset) Object.assign(x, { gymSet:false, gymName:'', gymLat:'', gymLng:'', gymBy:'' });
+      else Object.assign(x, res);
+      renderReport(report);
+    } catch(e){ busy(btn, false); msg($('em'+i), e, 'err'); }
+  };
+  $('aBody').querySelectorAll('button[data-gs]').forEach(b => b.addEventListener('click', () => saveGym(+b.dataset.gs, false, b)));
+  $('aBody').querySelectorAll('button[data-gr]').forEach(b => b.addEventListener('click', () => saveGym(+b.dataset.gr, true, b)));
+  $('aResult').hidden = false;
+}
+
+async function renderPhotos(i){
+  const x = report.rows[i], grid = $('g' + i), key = x.id + '|' + report.month;
+  if (!photoCache[key]){
+    grid.innerHTML = '<div class="muted" style="display:flex;gap:8px;align-items:center"><span class="spinner"></span> Loading photos…</div>';
+    try { photoCache[key] = await call('adminPhotos', $('aPin').value.trim(), x.id, report.month); }
+    catch(e){ grid.innerHTML = `<div class="msg err">${esc(e)}</div>`; return; }
+  }
+  const photos = photoCache[key];
+  grid.innerHTML = photos.map((p,j) => `
+    <div class="pcard ${p.flags.length?'flag':''} ${p.rejected?'rej':''}">
+      ${p.img ? `<img src="${p.img}" alt="${esc(x.name)} ${esc(p.date)}">` : '<div style="aspect-ratio:4/3;display:grid;place-items:center;background:var(--hb-raised)" class="muted">Photo not found in Drive</div>'}
+      <div class="pb">
+        <div class="pt"><span>${+p.date.slice(8)} ${new Date(p.date+'T00:00').toLocaleString('en-IN',{month:'short'})} · ${esc(p.time)}</span>
+          ${p.rejected ? '<span class="chip bad">Rejected</span>' : p.flags.length ? '<span class="chip bad">⚠ Review</span>' : '<span class="chip ok">OK</span>'}</div>
+        <div class="muted">${esc(p.source)} · ${esc(p.dist)} m from gym</div>
+        ${p.flags.map(f => `<div class="flagtxt">⚠ ${esc(f)}</div>`).join('')}
+        <div class="pact">
+          <a class="link" href="${esc(p.url)}" target="_blank" rel="noopener">Open in Drive</a>
+          <button class="btn ${p.rejected?'btn-ghost':'btn-ghost'} btn-sm" type="button" data-j="${j}">${p.rejected?'Accept':'Reject'}</button>
+        </div>
+      </div>
+    </div>`).join('') || '<div class="muted">No photos.</div>';
+  grid.querySelectorAll('button[data-j]').forEach(b => b.addEventListener('click', async () => {
+    const p = photos[+b.dataset.j]; busy(b, true);
+    try {
+      await call('adminSetStatus', $('aPin').value.trim(), p.row, !p.rejected);
+      p.rejected = !p.rejected;
+      const v = x.visits.find(v => v.row === p.row); if (v) v.rejected = p.rejected;
+      recalc(x); renderReport(report);
+    } catch(e){ busy(b, false); msg($("aMsg"), e, "err"); }
+  }));
+}
+
+/* ---------- START ---------- */
+(async function init(){
+  await loadDirectory();
+  const saved = store.get('gymSession');
+  if (saved && saved.empId){
+    try { me = await call('login', saved.empId, saved.pin); session = saved; renderHome(); show('viewHome'); }
+    catch(e){ store.del('gymSession'); }
+  }
+})();
+</script>
+</body>
+</html>
