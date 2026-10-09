@@ -97,7 +97,23 @@ select:focus,input:focus{outline:2px solid var(--hb-accent-line);outline-offset:
 .cal .dow{text-align:center;font:700 11px/16px var(--hb-font);color:var(--hb-muted)}
 .cal .day{aspect-ratio:1;max-width:100%;border-radius:10px;display:grid;place-items:center;font:600 13px/1 var(--hb-font);
   background:var(--hb-raised);color:var(--hb-muted);font-variant-numeric:tabular-nums}
+.cal .day{position:relative}
 .cal .day.done{background:var(--hb-accent);color:var(--hb-surface)}
+.cal .day.done::after{content:"✓";position:absolute;top:2px;right:4px;font-size:10px;font-weight:800}
+.cal .day.rej{background:var(--hb-warm-soft);color:var(--hb-warm-text)}
+.cal .day.rej::after{content:"✕";position:absolute;top:2px;right:4px;font-size:10px;font-weight:800}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--hb-muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.done-card{display:flex;flex-direction:column;gap:14px}
+.done-head{display:flex;gap:14px;align-items:center}
+.done-ic{width:52px;height:52px;flex:none;border-radius:var(--hb-r-pill);display:grid;place-items:center;
+  background:var(--hb-accent);color:var(--hb-surface);font:800 26px/1 var(--hb-font)}
+.done-head h2{margin:0}
+.done-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.done-meta div{background:var(--hb-surface);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--hb-text-2)}
+.done-meta b{display:block;font-size:16px;color:var(--hb-title);font-variant-numeric:tabular-nums}
+.done-photo{width:100%;max-height:260px;object-fit:cover;border-radius:12px;display:block}
+.prog{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--hb-text-2)}
 .cal .day.today{outline:2px solid var(--hb-accent-text);outline-offset:-2px;color:var(--hb-title)}
 .cal .day.done.today{color:var(--hb-surface)}
 .cal .day.future{opacity:.45}
@@ -217,6 +233,23 @@ input[type=file]{display:none}
     <div class="gymline" id="gymLine" hidden></div>
   </section>
 
+  <section class="card card--teal done-card" id="doneCard" hidden>
+    <div class="done-head">
+      <div class="done-ic">✓</div>
+      <div>
+        <h2>You're checked in for today</h2>
+        <div class="muted" id="doneSub"></div>
+      </div>
+    </div>
+    <img class="done-photo" id="donePhoto" alt="Your check-in photo" hidden>
+    <div class="done-meta" id="doneMeta"></div>
+    <div class="prog">
+      <div id="progText"></div>
+      <div class="bar"><i id="progBar" style="width:0%"></i></div>
+    </div>
+    <div class="muted">See you at the gym tomorrow.</div>
+  </section>
+
   <form class="card" id="gymCard" hidden>
     <div>
       <span class="hb-label">One-time setup</span>
@@ -297,9 +330,13 @@ input[type=file]{display:none}
   <section class="card">
     <div class="topbar">
       <h2 id="calTitle">This month</h2>
-      <span class="chip ok">● = gym day</span>
     </div>
     <div class="cal" id="cal"></div>
+    <div class="legend">
+      <span><i style="background:var(--hb-accent)"></i>Checked in</span>
+      <span><i style="background:var(--hb-warm-soft);border:1px solid var(--hb-warm)"></i>Rejected by HR</span>
+      <span><i style="border:2px solid var(--hb-accent-text)"></i>Today</span>
+    </div>
   </section>
 </main>
 
@@ -467,7 +504,8 @@ function renderHome(){
   $('monthCount').textContent = me.monthDates.length;
   const monthName = new Date(me.today + 'T00:00').toLocaleString('en-IN',{month:'long'});
   $('monthLabel').textContent = (me.monthDates.length === 1 ? 'gym day' : 'gym days') + ' in ' + monthName;
-  $('todayLine').textContent = me.todayDone ? `✓ Checked in today (${me.todayTime})` : 'Today\'s check-in is pending';
+  $('todayLine').textContent = me.todayDone ? '✓ Checked in today at ' + timeLabel(me.todayTime) : 'Today\'s check-in is pending';
+  renderDone();
   $('gymCard').hidden = me.gymSet;
   $('gymCard').querySelector('p.muted').textContent = `Your check-in photos must be taken within ${me.radius} m of this gym. If you change gyms later, HR/admin will update it.`;
   $('uploadCard').hidden = me.todayDone || !me.gymSet;
@@ -480,17 +518,44 @@ function renderHome(){
     <span class="muted">(contact HR to change)</span>`;
   renderCalendar();
 }
+let lastPhoto = null;   /* the photo just submitted, shown in the success card this session */
+function timeLabel(hhmm){
+  if (!hhmm) return '';
+  const p = hhmm.split(':').map(Number); const h = p[0] % 12 || 12;
+  return h + ':' + String(p[1]).padStart(2,'0') + (p[0] < 12 ? ' am' : ' pm');
+}
+function renderDone(){
+  $('doneCard').hidden = !me.todayDone;
+  if (!me.todayDone) return;
+  const dayName = new Date(me.today + 'T00:00').toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'long'});
+  $('doneSub').textContent = dayName + ' · ' + timeLabel(me.todayTime);
+  $('donePhoto').hidden = !lastPhoto; if (lastPhoto) $('donePhoto').src = lastPhoto;
+  const n = me.monthDates.length, target = me.minDays || 20;
+  const cells = [
+    ['Gym', esc(me.gymName || 'Your gym')],
+    ['Distance', me.todayDist === null || me.todayDist === undefined ? '—' : fmtDist(me.todayDist) + ' from gym'],
+    ['This month', n + (n === 1 ? ' day' : ' days')],
+    ['Streak', (me.streak || 0) + ((me.streak || 0) === 1 ? ' day' : ' days') + ' in a row']
+  ];
+  $('doneMeta').innerHTML = cells.map(c => '<div>' + c[0] + '<b>' + c[1] + '</b></div>').join('');
+  $('progText').textContent = n >= target
+    ? 'Target reached: ' + n + ' of ' + target + ' days. You are eligible for the gym fee this month.'
+    : n + ' of ' + target + ' days this month. ' + (target - n) + ' more to be eligible for the gym fee.';
+  $('progBar').style.width = Math.min(100, n / target * 100) + '%';
+}
 function renderCalendar(){
   const [y,m] = me.month.split('-').map(Number);
   const first = new Date(y, m-1, 1), days = new Date(y, m, 0).getDate();
   const done = new Set(me.monthDates.map(d => +d.slice(8)));
+  const rej = new Set((me.rejectedDates || []).map(d => +d.slice(8)));
   const todayN = +me.today.slice(8);
   $('calTitle').textContent = first.toLocaleString('en-IN',{month:'long',year:'numeric'});
   let html = ['S','M','T','W','T','F','S'].map(d=>`<div class="dow">${d}</div>`).join('');
   for (let i=0;i<first.getDay();i++) html += '<div></div>';
   for (let d=1; d<=days; d++){
-    const cls = ['day', done.has(d)?'done':'', d===todayN?'today':'', d>todayN?'future':''].join(' ');
-    html += `<div class="${cls}" title="${d}">${d}</div>`;
+    const cls = ['day', done.has(d)?'done':'', rej.has(d)?'rej':'', d===todayN?'today':'', d>todayN?'future':''].join(' ');
+    const tip = done.has(d) ? 'Checked in' : rej.has(d) ? 'Rejected by HR' : '';
+    html += `<div class="${cls}" title="${tip}">${d}</div>`;
   }
   $('cal').innerHTML = html;
 }
@@ -645,13 +710,12 @@ $('submitBtn').addEventListener('click', async () => {
   if (!pending) return;
   busy($('submitBtn'), true, ' Uploading…');
   try {
+    const photo = pending.dataUrl;
     me = await call('uploadPhoto', pending);
+    lastPhoto = photo;
     resetUpload();
     renderHome();
-    msg($('upMsg'), me.message, 'ok');
-    $('uploadCard').hidden = false; $('preview').hidden = true;
-    $('camRow').hidden = true; $('galRow').hidden = true; $('locBox').hidden = true;
-    $('gymHint').textContent = '';
+    $('doneCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch(e){ msg($('upMsg'), e, 'err'); }
   busy($('submitBtn'), false);
 });
