@@ -5,8 +5,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Habuild Gym Check-in</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@800&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.js"></script>
 <style>
 /* Habuild brand tokens */
 :root{
@@ -408,16 +410,31 @@ let me = null; /* profile from server */
 let pending = null; /* photo waiting for submit */
 
 /* ---------- LOGIN ---------- */
+function renderDirectory(dir){
+  const keepDept = $('dept').value, keepEmp = $('emp').value;
+  directory = dir;
+  $('dept').innerHTML = '<option value="">Select department</option>' +
+    dir.depts.map(d => `<option>${esc(d)}</option>`).join('');
+  $('aDept').innerHTML = '<option value="">All departments</option>' +
+    dir.depts.map(d => `<option>${esc(d)}</option>`).join('');
+  if (keepDept && dir.depts.indexOf(keepDept) >= 0){
+    $('dept').value = keepDept; $('dept').dispatchEvent(new Event('change'));
+    if (keepEmp) $('emp').value = keepEmp;
+  }
+}
 async function loadDirectory(){
+  /* Show the list saved from the last visit instantly, then refresh it from the server. */
+  const cached = store.get('gymDirectory');
+  if (cached && cached.depts) renderDirectory(cached);
   try {
-    directory = await call('getDirectory');
-    $('dept').innerHTML = '<option value="">Select department</option>' +
-      directory.depts.map(d => `<option>${esc(d)}</option>`).join('');
-    $('aDept').innerHTML = '<option value="">All departments</option>' +
-      directory.depts.map(d => `<option>${esc(d)}</option>`).join('');
+    const fresh = await call('getDirectory');
+    if (JSON.stringify(fresh) !== JSON.stringify(cached)) renderDirectory(fresh);
+    store.set('gymDirectory', fresh);
   } catch(e){
-    $('dept').innerHTML = '<option value="">Could not load</option>';
-    msg($('loginMsg'), 'Could not load the employee list: ' + e, 'err');
+    if (!cached){
+      $('dept').innerHTML = '<option value="">Could not load</option>';
+      msg($('loginMsg'), 'Could not load the employee list: ' + e, 'err');
+    }
   }
 }
 $('dept').addEventListener('change', () => {
@@ -830,12 +847,14 @@ async function renderPhotos(i){
 
 /* ---------- START ---------- */
 (async function init(){
-  await loadDirectory();
   const saved = store.get('gymSession');
+  /* Load the employee list and the saved login at the same time, not one after the other. */
+  const dirP = loadDirectory();
   if (saved && saved.empId){
     try { me = await call('login', saved.empId, saved.pin); session = saved; renderHome(); show('viewHome'); }
     catch(e){ store.del('gymSession'); }
   }
+  await dirP;
 })();
 </script>
 </body>
