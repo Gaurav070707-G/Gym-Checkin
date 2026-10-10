@@ -127,6 +127,13 @@ select:focus,input:focus{outline:2px solid var(--hb-accent-line);outline-offset:
 .cal .day.done::after{content:"✓";position:absolute;top:2px;right:4px;font-size:10px;font-weight:800}
 .cal .day.rej{background:var(--hb-warm-soft);color:var(--hb-warm-text)}
 .cal .day.rej::after{content:"✕";position:absolute;top:2px;right:4px;font-size:10px;font-weight:800}
+.calnav{display:flex;gap:8px}
+.navbtn{width:40px;height:40px;border-radius:var(--hb-r-pill);border:1px solid var(--hb-border);background:var(--hb-surface);
+  color:var(--hb-title);font:800 22px/1 var(--hb-font);cursor:pointer;display:grid;place-items:center}
+.navbtn:disabled{opacity:.35;cursor:default}
+.navbtn:focus-visible{outline:2px solid var(--hb-accent-text);outline-offset:2px}
+.calsum{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--hb-text-2)}
+.calsum.loading{opacity:.5}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--hb-muted)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .pend-card{display:flex;flex-direction:column;gap:14px;border-color:var(--hb-warm)}
@@ -389,7 +396,12 @@ input[type=file]{display:none}
   <section class="card">
     <div class="topbar">
       <h2 id="calTitle">This month</h2>
+      <div class="calnav">
+        <button class="navbtn" id="calPrev" type="button" aria-label="Previous month">‹</button>
+        <button class="navbtn" id="calNext" type="button" aria-label="Next month">›</button>
+      </div>
     </div>
+    <div class="calsum" id="calSum"></div>
     <div class="cal" id="cal"></div>
     <div class="legend">
       <span><i style="background:var(--hb-accent)"></i>Checked in</span>
@@ -555,7 +567,7 @@ $('loginForm').addEventListener('submit', async ev => {
   } catch(e){ msg($('loginMsg'), e, 'err'); }
   busy($('loginBtn'), false);
 });
-$('logoutBtn').addEventListener('click', () => { store.del('gymSession'); store.del('gymMe'); session = me = null; $('pin').value=''; resetUpload(); show('viewLogin'); });
+$('logoutBtn').addEventListener('click', () => { calMonth = null; Object.keys(calCache).forEach(k => delete calCache[k]); store.del('gymSession'); store.del('gymMe'); session = me = null; $('pin').value=''; resetUpload(); show('viewLogin'); });
 
 /* ---------- HOME ---------- */
 function renderHome(){
@@ -614,22 +626,57 @@ function renderDone(){
     : n + ' of ' + target + ' days this month. ' + (target - n) + ' more to be eligible for the gym fee.';
   $('progBar').style.width = Math.min(100, n / target * 100) + '%';
 }
+/* Calendar: current month by default; employees can go back to earlier months */
+let calMonth = null;            /* 'yyyy-MM' being shown */
+const calCache = {};            /* month -> {monthDates, rejectedDates} */
+function shiftMonth(ym, n){ const p = ym.split('-').map(Number); const d = new Date(p[0], p[1]-1+n, 1);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
 function renderCalendar(){
-  const [y,m] = me.month.split('-').map(Number);
+  if (!calMonth || calMonth > me.month) calMonth = me.month;
+  const isNow = calMonth === me.month;
+  const data = isNow ? { monthDates: me.monthDates, rejectedDates: me.rejectedDates || [] } : calCache[calMonth];
+  const [y,m] = calMonth.split('-').map(Number);
   const first = new Date(y, m-1, 1), days = new Date(y, m, 0).getDate();
-  const done = new Set(me.monthDates.map(d => +d.slice(8)));
-  const rej = new Set((me.rejectedDates || []).map(d => +d.slice(8)));
-  const todayN = +me.today.slice(8);
   $('calTitle').textContent = first.toLocaleString('en-IN',{month:'long',year:'numeric'});
+  $('calNext').disabled = isNow;
+  $('calPrev').disabled = calMonth <= shiftMonth(me.month, -12);
+  if (!data){ $('calSum').className = 'calsum loading'; $('calSum').textContent = 'Loading…'; $('cal').innerHTML = ''; return; }
+  const done = new Set(data.monthDates.map(d => +d.slice(8)));
+  const rej = new Set((data.rejectedDates || []).map(d => +d.slice(8)));
+  const todayN = isNow ? +me.today.slice(8) : 0;
+  const n = data.monthDates.length, target = me.minDays || 20;
+  $('calSum').className = 'calsum';
+  $('calSum').innerHTML = '<b>' + n + (n === 1 ? ' gym day' : ' gym days') + '</b>' +
+    (n >= target ? '<span class="chip ok">Eligible</span>'
+      : (isNow ? '<span class="chip">' + (target - n) + ' more to be eligible</span>' : '<span class="chip bad">Not eligible (' + target + ' needed)</span>'));
   let html = ['S','M','T','W','T','F','S'].map(d=>`<div class="dow">${d}</div>`).join('');
   for (let i=0;i<first.getDay();i++) html += '<div></div>';
   for (let d=1; d<=days; d++){
-    const cls = ['day', done.has(d)?'done':'', rej.has(d)?'rej':'', d===todayN?'today':'', d>todayN?'future':''].join(' ');
+    const cls = ['day', done.has(d)?'done':'', rej.has(d)?'rej':'', d===todayN?'today':'', isNow && d>todayN?'future':''].join(' ');
     const tip = done.has(d) ? 'Checked in' : rej.has(d) ? 'Rejected by HR' : '';
     html += `<div class="${cls}" title="${tip}">${d}</div>`;
   }
   $('cal').innerHTML = html;
 }
+async function goMonth(n){
+  calMonth = shiftMonth(calMonth || me.month, n);
+  if (calMonth > me.month) calMonth = me.month;
+  renderCalendar();
+  if (calMonth !== me.month && !calCache[calMonth]){
+    const want = calMonth;
+    try {
+      const r = await call('myMonth', session.empId, session.pin, want);
+      calCache[want] = r;
+    } catch(e){
+      calCache[want] = null;
+      if (calMonth === want){ $('calSum').className = 'calsum'; $('calSum').textContent = isNetErr(e) ? 'You are offline. Past months need internet.' : String(e); }
+      return;
+    }
+    if (calMonth === want) renderCalendar();
+  }
+}
+$('calPrev').addEventListener('click', () => goMonth(-1));
+$('calNext').addEventListener('click', () => goMonth(1));
 
 /* ---------- PHOTO READ + CHECKS ---------- */
 $('camInput').addEventListener('change', e => { handleFile(e.target.files[0], 'camera'); e.target.value=''; });
