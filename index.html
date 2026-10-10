@@ -104,6 +104,10 @@ select:focus,input:focus{outline:2px solid var(--hb-accent-line);outline-offset:
 .cal .day.rej::after{content:"✕";position:absolute;top:2px;right:4px;font-size:10px;font-weight:800}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--hb-muted)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.pend-card{display:flex;flex-direction:column;gap:14px;border-color:var(--hb-warm)}
+.pend-ic{background:var(--hb-warm-soft)!important;color:var(--hb-warm-text)!important;font-size:24px!important}
+.offbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;text-align:center;font:600 13px/18px var(--hb-font);
+  padding:8px 12px;border-radius:var(--hb-r-md);background:var(--hb-warm-soft);color:var(--hb-warm-text);border:1px solid var(--hb-warm)}
 .done-card{display:flex;flex-direction:column;gap:14px}
 .done-head{display:flex;gap:14px;align-items:center}
 .done-ic{width:52px;height:52px;flex:none;border-radius:var(--hb-r-pill);display:grid;place-items:center;
@@ -210,6 +214,7 @@ input[type=file]{display:none}
 
 <!-- ============ EMPLOYEE HOME ============ -->
 <main class="wrap" id="viewHome" hidden>
+  <div class="offbar" id="offBar" hidden>You are offline. You can still take your photo; it will upload later.</div>
   <div class="brand brand-sm"><img class="logo" src="https://assets.habit.yoga/habuildassets/hbin-logo.png" alt="Habuild" onerror="this.hidden=true"></div>
   <div class="topbar">
     <div class="who">
@@ -231,6 +236,20 @@ input[type=file]{display:none}
       </div>
     </div>
     <div class="gymline" id="gymLine" hidden></div>
+  </section>
+
+  <section class="card pend-card" id="pendCard" hidden>
+    <div class="done-head">
+      <div class="done-ic pend-ic">↑</div>
+      <div>
+        <h2>Saved on your phone, waiting to upload</h2>
+        <div class="muted" id="pendSub"></div>
+      </div>
+    </div>
+    <img class="done-photo" id="pendPhoto" alt="Your saved check-in photo">
+    <div class="muted">Your photo, time and gym location were saved when you took it. It will upload automatically as soon as you are online. Please open this page again before <b>11:59 PM today</b> and do not clear your browser data.</div>
+    <div class="msg" id="pendMsg" hidden></div>
+    <button class="btn btn-cta" id="pendRetry" type="button">Upload now</button>
   </section>
 
   <section class="card card--teal done-card" id="doneCard" hidden>
@@ -302,7 +321,7 @@ input[type=file]{display:none}
       <p class="muted" id="gymHint"></p>
     </div>
     <div class="msg ok" style="font-size:14px">Take a mirror photo at the gym with your back camera. Your face and the gym (machines/weights) must both be clearly visible. Admins can see every photo.</div>
-    <div class="msg err" id="desktopNote" hidden>To take a photo, open this link on your phone. On a computer you can only upload an original photo that has its date and location saved inside it.</div>
+    <div class="msg err" id="desktopNote" hidden>Please open this link on your phone. Check-in photos can only be taken with your phone's camera at the gym.</div>
     <div class="locbox" id="locBox" hidden>
       <span id="locText">Checking your location…</span>
       <button class="btn btn-ghost btn-sm" id="locRetry" type="button" hidden>Check location again</button>
@@ -311,11 +330,7 @@ input[type=file]{display:none}
       <label class="btn btn-cta" for="camInput" id="camBtn">Take photo</label>
     </div>
     <input type="file" id="camInput" accept="image/*" capture="environment">
-    <div class="gal" id="galRow">
-      <label class="link" for="galInput">Took the photo earlier? Upload it from your gallery</label>
-      <div class="muted">Only accepted if the original photo has today's date and the gym location saved inside it. Edited, forwarded or screenshot photos will not work.</div>
-    </div>
-    <input type="file" id="galInput" accept="image/jpeg,image/heic,image/*">
+    <div class="muted" id="offlineTip" style="text-align:center">No internet at the gym? Take the photo anyway. It is saved on your phone with the gym location and uploads automatically when you are back online (until 11:59 PM).</div>
     <div class="msg" id="upMsg" hidden></div>
 
     <div class="preview" id="preview" hidden>
@@ -386,15 +401,17 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwmi2F_QZr1zNEEws0asbIP
    Hosted anywhere else (Netlify, your own website) it uses the JSON API at API_URL,
    which needs no Google login, so phones with several Google accounts open it normally. */
 const IN_APPS_SCRIPT = !!(window.google && google.script && google.script.run);
+const NET_ERR = 'Could not reach the server. Please check your internet and try again.';
+function isNetErr(e){ return e === NET_ERR || /network|failed to fetch|connection|timed? ?out/i.test(String(e)); }
 const call = (fn, ...args) => new Promise((res, rej) => {
-  const t = setTimeout(() => rej('The server did not respond. Please check your internet and refresh the page.'), 60000);
+  const t = setTimeout(() => rej(NET_ERR), 60000);
   const done = (ok, v) => { clearTimeout(t); ok ? res(v) : rej(v); };
   if (IN_APPS_SCRIPT) {
     try {
       google.script.run
         .withSuccessHandler(r => done(true, r))
         .withFailureHandler(e => done(false, e && e.message ? e.message : String(e)))[fn](...args);
-    } catch(e){ done(false, 'Could not reach the server: ' + (e && e.message ? e.message : e)); }
+    } catch(e){ done(false, NET_ERR); }
     return;
   }
   if (API_URL.indexOf('https') !== 0) return done(false, 'Setup needed: API_URL is not set in the page code.');
@@ -407,7 +424,7 @@ const call = (fn, ...args) => new Promise((res, rej) => {
   })
     .then(r => r.json())
     .then(d => d && d.ok ? done(true, d.result) : done(false, (d && d.error) || 'Unknown server error.'))
-    .catch(() => done(false, 'Could not reach the server. Please check your internet and try again.'));
+    .catch(() => done(false, NET_ERR));
 });
 /* Show unexpected script errors on screen (helps troubleshooting) */
 window.addEventListener('error', e => {
@@ -492,13 +509,13 @@ $('loginForm').addEventListener('submit', async ev => {
   busy($('loginBtn'), true, ' Logging in…'); msg($('loginMsg'), '', 'err');
   try {
     me = await call('login', empId, pin);
-    session = { empId, pin }; store.set('gymSession', session);
+    session = { empId, pin }; store.set('gymSession', session); store.set('gymMe', me);
     renderHome();
     show('viewHome');
   } catch(e){ msg($('loginMsg'), e, 'err'); }
   busy($('loginBtn'), false);
 });
-$('logoutBtn').addEventListener('click', () => { store.del('gymSession'); session = me = null; $('pin').value=''; resetUpload(); show('viewLogin'); });
+$('logoutBtn').addEventListener('click', () => { store.del('gymSession'); store.del('gymMe'); session = me = null; $('pin').value=''; resetUpload(); show('viewLogin'); });
 
 /* ---------- HOME ---------- */
 function renderHome(){
@@ -513,7 +530,16 @@ function renderHome(){
   $('gymCard').hidden = me.gymSet;
   $('gymCard').querySelector('p.muted').textContent = `Your check-in photos must be taken within ${me.radius} m of this gym. If you change gyms later, HR/admin will update it.`;
   $('uploadCard').hidden = me.todayDone || !me.gymSet;
-  $('camRow').hidden = !IS_PHONE; $('galRow').hidden = false;
+  $('camRow').hidden = !IS_PHONE; $('offlineTip').hidden = !IS_PHONE;
+  const q = getOffline();
+  const hasQueued = !!(q && q.empId === me.id && q.date === todayIST() && !me.todayDone);
+  $('pendCard').hidden = !hasQueued;
+  if (hasQueued){
+    $('uploadCard').hidden = true;
+    $('pendSub').textContent = 'Photo taken at ' + timeLabel(q.payload.takenAt.slice(11,16)) + ' today';
+    $('pendPhoto').src = q.payload.dataUrl;
+    $('todayLine').textContent = 'Today\'s photo is saved on your phone, waiting to upload';
+  }
   if (!$('uploadCard').hidden) checkLocation();
   $('gymHint').textContent = `The photo must be taken today, within ${me.radius} m of ${me.gymName || 'your gym'}.`;
   $('gymLine').hidden = !me.gymSet;
@@ -566,14 +592,12 @@ function renderCalendar(){
 
 /* ---------- PHOTO READ + CHECKS ---------- */
 $('camInput').addEventListener('change', e => { handleFile(e.target.files[0], 'camera'); e.target.value=''; });
-$('galInput').addEventListener('change', e => { handleFile(e.target.files[0], 'gallery'); e.target.value=''; });
 /* Check-in only from a phone: laptops ignore the camera setting and open a file picker instead. */
 const IS_PHONE = (navigator.userAgentData && navigator.userAgentData.mobile) ||
   /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
   (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 $('desktopNote').hidden = IS_PHONE;
 $('camRow').hidden = !IS_PHONE;
-if (!IS_PHONE) $('galInput').removeAttribute('capture');
 
 function resetUpload(){ pending = null; $('preview').hidden = true; msg($('upMsg'),'','ok'); }
 
@@ -605,6 +629,33 @@ function deviceLocation(){
       { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
   });
 }
+/* Camera make/model saved inside the photo, e.g. "samsung SM-S918B" */
+function cameraName(t){
+  return [t.Make, t.Model].filter(Boolean).map(x => String(x).replace(/\u0000/g,'').trim()).join(' ') || 'unknown camera';
+}
+/* Returns a reason if a gallery photo does not look like an untouched phone-camera photo, otherwise ''. */
+const EDITOR_APPS = /snapseed|photoshop|lightroom|picsart|instagram|canva|vsco|facetune|gimp|pixlr|meitu|b612|snow|faceapp|polarr|prequel|inshot|remini|airbrush|youcam|picasa|editor|edit/i;
+function galleryOriginalCheck(t, w, h){
+  if (!t.Make && !t.Model) {
+    return 'This photo has no camera details inside it, so it was not taken with the phone camera (or it was edited, downloaded, forwarded or is a screenshot). Use a photo taken with your phone camera.';
+  }
+  if (t.Software && EDITOR_APPS.test(String(t.Software))) {
+    return 'This photo was edited with ' + String(t.Software).trim() + '. Only the original camera photo is accepted.';
+  }
+  const parse = v => { const m = String(v || '').match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+    return m ? new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]).getTime() : NaN; };
+  const shot = parse(t.DateTimeOriginal), changed = parse(t.DateTime);
+  if (isFinite(shot) && isFinite(changed) && Math.abs(changed - shot) > 2*60*1000) {
+    return 'This photo was changed after it was taken (edited, cropped or saved again). Only the original camera photo is accepted.';
+  }
+  const ew = Number(t.PixelXDimension), eh = Number(t.PixelYDimension);
+  if (ew > 0 && eh > 0 && w > 0 && h > 0) {
+    const same = (Math.abs(ew - w) <= 2 && Math.abs(eh - h) <= 2) || (Math.abs(ew - h) <= 2 && Math.abs(eh - w) <= 2);
+    if (!same) return 'This photo was cropped or resized after it was taken. Only the original camera photo is accepted.';
+  }
+  return '';
+}
+
 function compress(file){
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file), img = new Image();
@@ -614,7 +665,7 @@ function compress(file){
       c.width = Math.round(img.naturalWidth*s); c.height = Math.round(img.naturalHeight*s);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      res(c.toDataURL('image/jpeg', 0.75));
+      res({ dataUrl: c.toDataURL('image/jpeg', 0.75), w: img.naturalWidth, h: img.naturalHeight });
     };
     img.onerror = () => rej('Could not open this photo. Please try a JPEG photo.');
     img.src = url;
@@ -663,9 +714,8 @@ async function handleFile(file, mode){
   try { live = await deviceLocation(); } catch(e){ liveErr = e; }
   const loc = fromGallery ? exifLoc : (exifLoc || live), source = exifLoc ? 'EXIF' : 'DEVICE';
   if (!loc && fromGallery){
-    ok = false;
-    checks.push({pass:false, t:'No location saved inside this photo',
-      d:'Gallery photos are only accepted if the original photo has the gym location saved inside it. Turn on the location tag in your camera settings, or use Take photo at the gym.'});
+    checks.push({pass:true, t:'Location not saved in this photo',
+      d:'Your phone removed the location from this gallery photo, so it cannot be checked. It will be accepted, and HR may review it.'});
   } else if (!loc){
     ok = false;
     checks.push({pass:false, t:'No location found',
@@ -695,8 +745,15 @@ async function handleFile(file, mode){
     }
   }
 
-  let dataUrl;
-  try { dataUrl = await compress(file); } catch(e){ return msg($('upMsg'), e, 'err'); }
+  let dataUrl, imgW = 0, imgH = 0;
+  try { const z = await compress(file); dataUrl = z.dataUrl; imgW = z.w; imgH = z.h; } catch(e){ return msg($('upMsg'), e, 'err'); }
+
+  /* 4) Gallery photos: must be an original phone-camera photo, not edited or from another app */
+  if (fromGallery){
+    const why = galleryOriginalCheck(tags, imgW, imgH);
+    if (why){ ok = false; checks.push({pass:false, t:'Not an original camera photo', d: why}); }
+    else checks.push({pass:true, t:'Original camera photo', d:'Taken with ' + cameraName(tags)});
+  }
 
   $('prevImg').src = dataUrl;
   $('checks').innerHTML = checks.map(c => `<div class="check ${c.pass?'pass':'fail'}">
@@ -706,11 +763,12 @@ async function handleFile(file, mode){
   $('submitBtn').hidden = !ok;
   /* Retake opens the camera on phones; on a computer (or for gallery uploads) it picks another file */
   const useCam = IS_PHONE && !fromGallery;
-  $('retakeBtn').setAttribute('for', useCam ? 'camInput' : 'galInput');
+  $('retakeBtn').setAttribute('for', 'camInput');
   $('retakeBtn').textContent = ok ? (useCam ? 'Retake photo' : 'Choose another photo') : (useCam ? 'Take a new photo' : 'Choose another photo');
   $('retakeHint').hidden = !ok;
   msg($('upMsg'), ok ? 'All checks passed. You can submit now.' : 'This photo cannot be accepted. See the reason above and take a new photo.', ok ? 'ok' : 'err');
-  pending = ok ? { empId: session.empId, pin: session.pin, dataUrl, lat: loc.lat, lng: loc.lng, source, takenAt,
+  pending = ok ? { empId: session.empId, pin: session.pin, dataUrl, lat: loc ? loc.lat : null, lng: loc ? loc.lng : null,
+    source: loc ? source : 'NONE', takenAt, camera: cameraName(tags),
     mode: fromGallery ? 'gallery' : 'camera', dateFromPhoto: dateFromPhoto,
     live: live ? { lat: live.lat, lng: live.lng, acc: live.acc } : null } : null;
 }
@@ -718,16 +776,67 @@ async function handleFile(file, mode){
 $('submitBtn').addEventListener('click', async () => {
   if (!pending) return;
   busy($('submitBtn'), true, ' Uploading…');
+  const payload = pending;
   try {
-    const photo = pending.dataUrl;
-    me = await call('uploadPhoto', pending);
-    lastPhoto = photo;
+    me = await call('uploadPhoto', payload);
+    store.set('gymMe', me);
+    lastPhoto = payload.dataUrl;
     resetUpload();
     renderHome();
     $('doneCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch(e){ msg($('upMsg'), e, 'err'); }
+  } catch(e){
+    if (isNetErr(e) && saveOffline(payload)){
+      resetUpload(); renderHome(); startOfflineRetry();
+      $('pendCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      msg($('upMsg'), isNetErr(e) ? NET_ERR + ' Your phone storage is full, so the photo could not be saved for later.' : e, 'err');
+    }
+  }
   busy($('submitBtn'), false);
 });
+
+/* ---------- OFFLINE CHECK-IN (save now, upload later) ---------- */
+function todayIST(){ return istString(new Date()).slice(0,10); }
+function getOffline(){ return store.get('gymOffline'); }
+function saveOffline(payload){
+  try {
+    localStorage.setItem('gymOffline', JSON.stringify({ empId: payload.empId, date: payload.takenAt.slice(0,10), savedAt: Date.now(), payload: payload }));
+    return true;
+  } catch(e){ return false; }
+}
+let offlineTimer = null, flushing = false;
+function startOfflineRetry(){ if (!offlineTimer) offlineTimer = setInterval(flushOffline, 30000); }
+async function flushOffline(manual){
+  const q = getOffline();
+  if (!q){ clearInterval(offlineTimer); offlineTimer = null; return; }
+  if (flushing) return;
+  if (q.date !== todayIST()){
+    store.del('gymOffline');
+    if (me){ renderHome(); msg($('upMsg'), 'Your saved check-in from ' + q.date + ' could not be uploaded before midnight, so it has expired.', 'err'); }
+    return;
+  }
+  flushing = true;
+  if (manual) busy($('pendRetry'), true, ' Uploading…');
+  try {
+    const res = await call('uploadPhoto', q.payload);
+    store.del('gymOffline');
+    if (me && me.id === q.empId){ me = res; store.set('gymMe', me); lastPhoto = q.payload.dataUrl; renderHome(); }
+    $('offBar').hidden = true;
+  } catch(e){
+    if (isNetErr(e)){
+      if (manual) msg($('pendMsg'), 'Still offline. It will keep trying automatically.', 'err');
+    } else {
+      store.del('gymOffline');
+      if (me){ renderHome(); msg($('upMsg'), 'Your saved check-in could not be accepted: ' + e, 'err'); }
+    }
+  }
+  if (manual) busy($('pendRetry'), false);
+  flushing = false;
+}
+$('pendRetry').addEventListener('click', () => flushOffline(true));
+window.addEventListener('online', () => { $('offBar').hidden = true; flushOffline(); });
+window.addEventListener('offline', () => { $('offBar').hidden = false; });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && getOffline()) flushOffline(); });
 
 /* ---------- LOCATION PRE-CHECK (before the camera opens) ---------- */
 let locChecking = false;
@@ -899,7 +1008,7 @@ async function renderPhotos(i){
       <div class="pb">
         <div class="pt"><span>${+p.date.slice(8)} ${new Date(p.date+'T00:00').toLocaleString('en-IN',{month:'short'})} · ${esc(p.time)}</span>
           ${p.rejected ? '<span class="chip bad">Rejected</span>' : p.flags.length ? '<span class="chip bad">⚠ Review</span>' : '<span class="chip ok">OK</span>'}</div>
-        <div class="muted">${esc(p.source)} · ${esc(p.dist)} m from gym</div>
+        <div class="muted">${esc(p.source)} · ${p.dist === '' || p.dist === null ? 'location not verified' : esc(p.dist) + ' m from gym'}</div>
         ${p.flags.map(f => `<div class="flagtxt">⚠ ${esc(f)}</div>`).join('')}
         <div class="pact">
           <a class="link" href="${esc(p.url)}" target="_blank" rel="noopener">Open in Drive</a>
@@ -924,8 +1033,24 @@ async function renderPhotos(i){
   /* Load the employee list and the saved login at the same time, not one after the other. */
   const dirP = loadDirectory();
   if (saved && saved.empId){
-    try { me = await call('login', saved.empId, saved.pin); session = saved; renderHome(); show('viewHome'); }
-    catch(e){ store.del('gymSession'); }
+    try { me = await call('login', saved.empId, saved.pin); session = saved; store.set('gymMe', me); renderHome(); show('viewHome'); }
+    catch(e){
+      const cachedMe = store.get('gymMe');
+      if (isNetErr(e) && cachedMe && cachedMe.id === saved.empId){
+        /* Offline: open with the profile saved on this phone */
+        me = cachedMe; session = saved;
+        if (me.today !== todayIST()){ me.today = todayIST(); me.todayDone = false; me.todayTime = ''; }
+        renderHome(); show('viewHome'); $('offBar').hidden = false;
+      } else if (!isNetErr(e)) {
+        store.del('gymSession'); store.del('gymMe');
+      }
+    }
+  }
+  if (getOffline()){ flushOffline(); startOfflineRetry(); }
+  if (!navigator.onLine) $('offBar').hidden = false;
+  /* Offline support when hosted on the web (not inside Apps Script) */
+  if ('serviceWorker' in navigator && !IN_APPS_SCRIPT && location.protocol === 'https:'){
+    navigator.serviceWorker.register('sw.js').catch(() => {});
   }
   await dirP;
 })();
