@@ -850,8 +850,17 @@ async function checkLocation(){
   $('camBtn').classList.add('off');
   try {
     const p = await deviceLocation();
-    box.className = 'locbox ok';
-    $('locText').textContent = '✓ Location is on' + (p.acc ? ' (accuracy ' + Math.round(p.acc) + ' m)' : '') + '. You can take your photo.';
+    const acc = p.acc ? ' (GPS accuracy ±' + Math.round(p.acc) + ' m)' : '';
+    const dist = (me && me.gymSet) ? haversine(p.lat, p.lng, me.gymLat, me.gymLng) : null;
+    if (dist !== null && dist > me.radius){
+      box.className = 'locbox bad';
+      $('locText').textContent = 'Location is on' + acc + ', but you are ' + fmtDist(dist) + ' away from ' + (me.gymName || 'your gym') +
+        '. Photos must be taken within ' + me.radius + ' m of the gym. Take the photo when you are at the gym.';
+      $('locRetry').hidden = false;
+    } else {
+      box.className = 'locbox ok';
+      $('locText').textContent = '✓ Location is on' + acc + (dist !== null ? '. You are ' + fmtDist(dist) + ' from your gym' : '') + '. You can take your photo.';
+    }
     $('camBtn').classList.remove('off');
   } catch(e){
     box.className = 'locbox bad';
