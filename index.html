@@ -5,6 +5,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Habuild Gym Check-in</title>
+<script>
+  /* Logged in before on this phone? Hide the login screen from the very first paint. */
+  try { if (localStorage.getItem('gymSession') && localStorage.getItem('gymMe')) document.documentElement.className += ' has-session'; } catch (e) {}
+</script>
 <link rel="preconnect" href="https://script.google.com">
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@800&display=swap">
@@ -37,6 +41,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
+.has-session #viewLogin{display:none}
 body{
   min-height:100vh;
   background:linear-gradient(180deg,var(--hb-wash) 0,var(--hb-ground) 45%) var(--hb-ground);
@@ -471,7 +476,7 @@ const store = {
   set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
   del(k){ try { localStorage.removeItem(k); } catch(e){} }
 };
-function show(view){ ['viewLogin','viewHome','viewAdmin'].forEach(v => $(v).hidden = v !== view); window.scrollTo(0,0); }
+function show(view){ document.documentElement.classList.remove('has-session'); ['viewLogin','viewHome','viewAdmin'].forEach(v => $(v).hidden = v !== view); window.scrollTo(0,0); }
 function msg(el, text, type){ el.textContent = text; el.className = 'msg ' + type; el.hidden = !text; }
 function busy(btn, on, label){
   if (on){ btn.dataset.l = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>' + (label||''); }
@@ -1075,19 +1080,30 @@ async function renderPhotos(i){
 /* ---------- START ---------- */
 (async function init(){
   const saved = store.get('gymSession');
+  const cachedMe = store.get('gymMe');
+  /* Already logged in on this phone: show the home screen instantly from the saved profile,
+     then refresh it from the server in the background. */
+  let shownFromCache = false;
+  if (saved && saved.empId && cachedMe && cachedMe.id === saved.empId){
+    me = cachedMe; session = saved;
+    if (me.today !== todayIST()){ me.today = todayIST(); me.month = me.today.slice(0,7); me.todayDone = false; me.todayTime = ''; }
+    renderHome(); show('viewHome'); shownFromCache = true;
+  }
   /* Load the employee list and the saved login at the same time, not one after the other. */
   const dirP = loadDirectory();
   if (saved && saved.empId){
-    try { me = await call('login', saved.empId, saved.pin); session = saved; store.set('gymMe', me); renderHome(); show('viewHome'); }
-    catch(e){
-      const cachedMe = store.get('gymMe');
-      if (isNetErr(e) && cachedMe && cachedMe.id === saved.empId){
-        /* Offline: open with the profile saved on this phone */
-        me = cachedMe; session = saved;
-        if (me.today !== todayIST()){ me.today = todayIST(); me.todayDone = false; me.todayTime = ''; }
-        renderHome(); show('viewHome'); $('offBar').hidden = false;
-      } else if (!isNetErr(e)) {
-        store.del('gymSession'); store.del('gymMe');
+    try {
+      const fresh = await call('login', saved.empId, saved.pin);
+      me = fresh; session = saved; store.set('gymMe', me);
+      if (!(shownFromCache && document.getElementById('preview') && !$('preview').hidden)) renderHome();
+      if (!shownFromCache) show('viewHome');
+      $('offBar').hidden = true;
+    } catch(e){
+      if (isNetErr(e)){
+        if (shownFromCache) $('offBar').hidden = false;
+      } else {
+        /* PIN changed or employee removed: back to login */
+        store.del('gymSession'); store.del('gymMe'); session = me = null; show('viewLogin');
       }
     }
   }
