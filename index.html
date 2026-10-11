@@ -188,6 +188,7 @@ input[type=file]{display:none}
   background:var(--hb-raised);color:var(--hb-text-2)}
 .locbox.ok{background:var(--hb-accent-soft);color:var(--hb-accent-text)}
 .locbox.bad{background:var(--hb-warm-soft);color:var(--hb-warm-text);border:1px solid var(--hb-warm)}
+#locText{white-space:pre-line}
 .btn.off{opacity:.45;pointer-events:none}
 .gal{display:flex;flex-direction:column;gap:4px;text-align:center}
 .gal .link{cursor:pointer;text-decoration:underline}
@@ -704,18 +705,65 @@ function exifGps(t){
   const lat = conv(t.GPSLatitude, t.GPSLatitudeRef), lng = conv(t.GPSLongitude, t.GPSLongitudeRef);
   return (lat === null || lng === null || (lat === 0 && lng === 0)) ? null : { lat, lng };
 }
-function deviceLocation(){
-  return new Promise((res, rej) => {
-    if (!navigator.geolocation) return rej('This browser does not support location.');
-    navigator.geolocation.getCurrentPosition(
-      p => res({ lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy }),
-      err => {
-        if (err && err.code === 1) rej('Location permission is blocked for this website. Tap the lock or settings icon next to the web address, open Permissions, set Location to Allow, then tap Check location again.');
-        else if (err && err.code === 2) rej('Your phone\'s Location (GPS) is turned off. Swipe down from the top of the screen, turn on Location, then tap Check location again.');
-        else rej('Could not get your location in time. Move near a window or outside, then tap Check location again.');
-      },
-      { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
-  });
+/* Which phone and browser, so location help shows the exact steps for that phone. */
+const UA = navigator.userAgent || '';
+const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(UA));
+const IN_APP = /FBAN|FBAV|Instagram|Line\/|LinkedInApp|Snapchat|; wv\)/i.test(UA);
+function browserName(){
+  if (IS_IOS){
+    if (/CriOS/i.test(UA)) return 'Chrome';
+    if (/FxiOS/i.test(UA)) return 'Firefox';
+    if (/EdgiOS/i.test(UA)) return 'Edge';
+    return 'Safari';
+  }
+  if (/SamsungBrowser/i.test(UA)) return 'Samsung Internet';
+  if (/EdgA/i.test(UA)) return 'Edge';
+  if (/Firefox/i.test(UA)) return 'Firefox';
+  return 'Chrome';
+}
+function permissionHelp(){
+  const b = browserName();
+  if (IN_APP) return 'Location is blocked inside this app. Open this link in ' + (IS_IOS ? 'Safari' : 'Chrome') +
+    ' instead: tap the menu (three dots) and choose Open in browser, then tap Allow when it asks for location.';
+  if (IS_IOS){
+    const appSetting = (b === 'Safari')
+      ? '1. Open the iPhone Settings app > Privacy & Security > Location Services (must be ON) > Safari Websites > choose While Using the App, and turn ON Precise Location.'
+      : '1. Open the iPhone Settings app > Privacy & Security > Location Services (must be ON) > ' + b + ' > choose While Using the App, and turn ON Precise Location.';
+    const siteSetting = (b === 'Safari')
+      ? '2. Come back to Safari, tap the aA button next to the web address > Website Settings > Location > Allow.'
+      : '2. Come back to ' + b + ' and reload this page. Tap Allow when it asks for location.';
+    return 'Your phone location is on, but ' + b + ' is not allowed to use it. Fix it once:\n' + appSetting + '\n' + siteSetting + '\n3. Tap Check location again.';
+  }
+  return 'Your phone location is on, but ' + b + ' is not allowed to use it. Fix it once:\n' +
+    '1. Open phone Settings > Apps > ' + b + ' > Permissions > Location > choose Allow only while using the app, and turn ON Use precise location.\n' +
+    '2. Come back here, tap the icon on the left of the web address > Permissions (or Site settings) > Location > Allow. If you see Reset permissions, tap it and reload the page.\n' +
+    '3. Tap Check location again and tap Allow.';
+}
+function getPos(high, timeout){
+  return new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej,
+    { enableHighAccuracy:high, timeout:timeout, maximumAge:0 }));
+}
+async function deviceLocation(){
+  if (!navigator.geolocation) throw 'This browser does not support location. Please open the link in ' + (IS_IOS ? 'Safari.' : 'Chrome.');
+  let p;
+  try { p = await getPos(true, 15000); }
+  catch(err){
+    if (err && err.code === 1) throw permissionHelp();
+    /* GPS was slow or unavailable: try once more with normal accuracy (Wi-Fi / mobile network). */
+    try { p = await getPos(false, 15000); }
+    catch(err2){
+      if (err2 && err2.code === 1) throw permissionHelp();
+      if (err2 && err2.code === 2) throw 'Your phone could not find its location. Check that Location is ON (swipe down from the top of the screen' +
+        (IS_IOS ? ', or Settings > Privacy & Security > Location Services' : '') + '), then tap Check location again.';
+      throw 'Could not get your location in time. Move near a window or outside, then tap Check location again.';
+    }
+  }
+  return { lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy };
+}
+function approxHelp(){
+  return IS_IOS
+    ? ' Your location looks approximate. Turn ON Precise Location: Settings > Privacy & Security > Location Services > ' + (browserName() === 'Safari' ? 'Safari Websites' : browserName()) + ' > Precise Location.'
+    : ' Your location looks approximate. Turn ON Use precise location: Settings > Apps > ' + browserName() + ' > Permissions > Location.';
 }
 /* Camera make/model saved inside the photo, e.g. "samsung SM-S918B" */
 function cameraName(t){
@@ -943,7 +991,8 @@ async function checkLocation(){
     if (dist !== null && dist > me.radius){
       box.className = 'locbox bad';
       $('locText').textContent = 'Location is on' + acc + ', but you are ' + fmtDist(dist) + ' away from ' + (me.gymName || 'your gym') +
-        '. Photos must be taken within ' + me.radius + ' m of the gym. Take the photo when you are at the gym.';
+        '. Photos must be taken within ' + me.radius + ' m of the gym. Take the photo when you are at the gym.' +
+        (p.acc > 1000 ? approxHelp() : '');
       $('locRetry').hidden = false;
     } else {
       box.className = 'locbox ok';
