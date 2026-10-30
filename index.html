@@ -314,26 +314,9 @@ input[type=file]{display:none}
     </div>
 
     <div class="opt">
-      <div class="opt-h"><span class="opt-n">1</span> Best: you are at your gym right now</div>
+      <div class="opt-h">📍 Go to your gym, then tap the button</div>
+      <div class="muted">Stand inside your gym with Location ON. Your gym location is saved from where you are right now, so do this only at the gym.</div>
       <button class="btn btn-cta" id="gHere" type="button">Use my current location</button>
-    </div>
-
-    <div class="opt">
-      <div class="opt-h"><span class="opt-n">2</span> Or paste the gym's Google Maps link</div>
-      <div class="field">
-        <label for="gLink">Google Maps link or coordinates</label>
-        <input id="gLink" type="text" inputmode="url" placeholder="https://maps.app.goo.gl/...">
-      </div>
-      <button class="btn btn-ghost" id="gFind" type="button">Find on map</button>
-      <div class="help">
-        <strong>How to get the link</strong>
-        <ol>
-          <li>Open the Google Maps app and search for your gym.</li>
-          <li>Open the gym's own page (with its name and photos), tap <b>Share</b>, then <b>Copy link</b>.</li>
-          <li>Paste the link above and tap <b>Find on map</b>.</li>
-        </ol>
-        Gym not listed on Maps? Long-press the gym's exact spot on the map, copy the coordinates shown at the top (e.g. 19.0760, 72.8777) and paste them.
-      </div>
     </div>
 
     <div class="confirm" id="gConfirm" hidden>
@@ -1024,7 +1007,8 @@ function showGymConfirm(g){
   }
   const url = MAPS_URL + g.lat + ',' + g.lng;
   let note = '';
-  if (g.mode === 'here') note = 'Your current location' + (g.acc ? ' (accuracy ' + Math.round(g.acc) + ' m)' : '') + '.';
+  if (g.mode === 'here') note = 'Your current location' + (g.acc ? ' (accuracy ' + Math.round(g.acc) + ' m)' : '') +
+    ' will be saved as ' + ($('gName').value.trim() || 'your gym') + '. Tap Yes only if you are inside the gym right now.';
   else if (g.precise) note = 'Location read from your link.';
   else note = 'Warning: this link only gives an approximate map area, not the exact gym. Check the map carefully, or use your current location at the gym instead.';
   $('gFound').innerHTML = esc(note) + '<br><span style="font-variant-numeric:tabular-nums">' + g.lat.toFixed(6) + ', ' + g.lng.toFixed(6) + '</span> · ' +
@@ -1034,8 +1018,6 @@ function showGymConfirm(g){
 }
 function resetGymConfirm(){ pendingGym = null; $('gConfirm').hidden = true; }
 $('gRetry').addEventListener('click', resetGymConfirm);
-$('gLink').addEventListener('input', resetGymConfirm);
-
 $('gHere').addEventListener('click', async () => {
   msg($('gMsg'), '', 'err'); resetGymConfirm();
   busy($('gHere'), true, ' Getting your location…');
@@ -1045,19 +1027,6 @@ $('gHere').addEventListener('click', async () => {
     showGymConfirm({ mode: 'here', lat: p.lat, lng: p.lng, acc: p.acc });
   } catch(e){ msg($('gMsg'), e, 'err'); }
   busy($('gHere'), false);
-});
-
-$('gFind').addEventListener('click', async () => {
-  msg($('gMsg'), '', 'err'); resetGymConfirm();
-  const link = $('gLink').value.trim();
-  if (!link) return msg($('gMsg'), 'Paste the Google Maps link first.', 'err');
-  busy($('gFind'), true, ' Reading link…');
-  try {
-    const r = await call('previewGymLink', session.empId, session.pin, link);
-    showGymConfirm(r.pending ? { mode: 'link', link: link, pending: true }
-      : { mode: 'link', link: link, lat: r.lat, lng: r.lng, precise: r.precise });
-  } catch(e){ msg($('gMsg'), e, 'err'); }
-  busy($('gFind'), false);
 });
 
 $('gymCard').addEventListener('submit', async ev => {
