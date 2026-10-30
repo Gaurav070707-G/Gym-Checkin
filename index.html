@@ -196,16 +196,6 @@ input[type=file]{display:none}
 .opt-h{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--hb-title)}
 .opt-n{width:24px;height:24px;flex:none;border-radius:var(--hb-r-pill);display:grid;place-items:center;
   background:var(--hb-accent-soft);color:var(--hb-accent-text);font-size:13px}
-.sugg{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--hb-border);border-radius:12px;overflow:hidden}
-.sugg li{padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;border-top:1px solid var(--hb-border);background:var(--hb-surface,transparent)}
-.sugg li:first-child{border-top:0}
-.sugg li:hover,.sugg li:active{background:var(--hb-accent-soft)}
-.sugg .pin{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--hb-accent-soft);color:var(--hb-accent-text);font-size:14px}
-.sugg b{display:block;color:var(--hb-title);font-size:15px;line-height:20px}
-.sugg small{display:block;color:var(--hb-text-2);font-size:12px;line-height:17px}
-.sugg-note{font-size:13px;color:var(--hb-text-2)}
-details.more summary{cursor:pointer;font-weight:600;color:var(--hb-title);padding:4px 0}
-details.more[open] summary{margin-bottom:10px}
 .confirm{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:12px;background:var(--hb-accent-soft);border:1px solid var(--hb-accent-line)}
 .confirm strong{color:var(--hb-title)}
 .brand{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
@@ -329,17 +319,7 @@ details.more[open] summary{margin-bottom:10px}
     </div>
 
     <div class="opt">
-      <div class="opt-h"><span class="opt-n">2</span> Or search your gym</div>
-      <div class="field">
-        <label for="gSearch">Type gym name and area</label>
-        <input id="gSearch" type="search" autocomplete="off" placeholder="e.g. Iron Gym Dharampeth Nagpur">
-      </div>
-      <div class="sugg-note" id="gSuggNote" hidden></div>
-      <ul class="sugg" id="gSugg" hidden></ul>
-    </div>
-
-    <details class="opt more">
-      <summary>Can't find it? Paste a Google Maps link or coordinates</summary>
+      <div class="opt-h"><span class="opt-n">2</span> Or paste the gym's Google Maps link</div>
       <div class="field">
         <label for="gLink">Google Maps link or coordinates</label>
         <input id="gLink" type="text" inputmode="url" placeholder="https://maps.app.goo.gl/...">
@@ -354,7 +334,7 @@ details.more[open] summary{margin-bottom:10px}
         </ol>
         Gym not listed on Maps? Long-press the gym's exact spot on the map, copy the coordinates shown at the top (e.g. 19.0760, 72.8777) and paste them.
       </div>
-    </details>
+    </div>
 
     <div class="confirm" id="gConfirm" hidden>
       <strong>Is this your gym?</strong>
@@ -618,8 +598,9 @@ function renderHome(){
   $('gymHint').textContent = `The photo must be taken today, within ${me.radius} m of ${me.gymName || 'your gym'}.`;
   $('gymLine').hidden = !me.gymSet;
   if (me.gymSet) $('gymLine').innerHTML = `My gym: <strong>${esc(me.gymName || 'Registered gym')}</strong>
-    <a class="link" href="${MAPS_URL}${me.gymLat},${me.gymLng}" target="_blank" rel="noopener">Map</a>
+    <a class="link" href="${me.gymPending ? esc(me.gymLink) : MAPS_URL + me.gymLat + ',' + me.gymLng}" target="_blank" rel="noopener">Map</a>
     <span class="muted">(contact HR to change)</span>`;
+  if (me.gymPending) $('gymHint').textContent = 'Take your first check-in photo at ' + (me.gymName || 'your gym') + '. Its location will be saved as your gym location.';
   renderCalendar();
 }
 let lastPhoto = null;   /* the photo just submitted, shown in the success card this session */
@@ -885,7 +866,9 @@ async function handleFile(file, mode){
       d: loc.lat.toFixed(6) + ', ' + loc.lng.toFixed(6) + accTxt + ' · <a class="link" href="' + link + '" target="_blank" rel="noopener">View map</a>', html:true});
 
     /* 3) Gym distance */
-    if (me.gymSet){
+    if (me.gymPending){
+      checks.push({pass:true, t:'First check-in', d:'This photo location will be saved as your gym location.'});
+    } else if (me.gymSet){
       const dist = haversine(loc.lat, loc.lng, me.gymLat, me.gymLng);
       if (dist > me.radius){
         ok = false;
@@ -1007,7 +990,7 @@ async function checkLocation(){
   try {
     const p = await deviceLocation();
     const acc = p.acc ? ' (GPS accuracy ±' + Math.round(p.acc) + ' m)' : '';
-    const dist = (me && me.gymSet) ? haversine(p.lat, p.lng, me.gymLat, me.gymLng) : null;
+    const dist = (me && me.gymSet && !me.gymPending) ? haversine(p.lat, p.lng, me.gymLat, me.gymLng) : null;
     if (dist !== null && dist > me.radius){
       box.className = 'locbox bad';
       $('locText').textContent = 'Location is on' + acc + ', but you are ' + fmtDist(dist) + ' away from ' + (me.gymName || 'your gym') +
@@ -1032,11 +1015,16 @@ $('locRetry').addEventListener('click', checkLocation);
 let pendingGym = null;
 function showGymConfirm(g){
   pendingGym = g;
+  if (g.pending){
+    $('gFound').innerHTML = esc('Your gym link is saved. Google did not share the exact pin for this link, so your gym location will be set automatically from your first check-in photo at the gym. Make sure you take that first photo inside this gym.') +
+      '<br><a class="link" href="' + esc(g.link) + '" target="_blank" rel="noopener">Open your link to check it is the right gym</a>';
+    $('gConfirm').hidden = false;
+    $('gConfirm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   const url = MAPS_URL + g.lat + ',' + g.lng;
   let note = '';
   if (g.mode === 'here') note = 'Your current location' + (g.acc ? ' (accuracy ' + Math.round(g.acc) + ' m)' : '') + '.';
-  else if (g.mode === 'search') note = (g.placeName ? g.placeName + (g.address ? ', ' + g.address : '') + '. ' : '') +
-    'Tap Open in Google Maps and check the pin is exactly on your gym.';
   else if (g.precise) note = 'Location read from your link.';
   else if (g.byName) note = 'Found by the gym name and address in your link: ' + (g.placeName || '') +
     '. Tap Open in Google Maps to check the pin is exactly on your gym. If it is not, use your current location at the gym instead.';
@@ -1061,65 +1049,6 @@ $('gHere').addEventListener('click', async () => {
   busy($('gHere'), false);
 });
 
-/* ---------- GYM SEARCH (suggestions while typing) ---------- */
-let gBias = null, gTimer = null, gSeq = 0, gResults = [];
-const PHOTON_URL = 'https:' + '/' + '/photon.komoot.io/api/?limit=5&bbox=68,6,97.5,37.5&q=';
-function getBias(){
-  if (gBias || !navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(p => { gBias = { lat:p.coords.latitude, lng:p.coords.longitude }; },
-    () => {}, { enableHighAccuracy:false, timeout:8000, maximumAge:600000 });
-}
-async function photonSearch(q){
-  try {
-    let url = PHOTON_URL + encodeURIComponent(q);
-    if (gBias) url += '&lat=' + gBias.lat + '&lon=' + gBias.lng;
-    const r = await fetch(url, { credentials:'omit' });
-    const j = await r.json();
-    return (j.features || []).map(f => {
-      const pr = f.properties || {};
-      const addr = [pr.street, pr.district || pr.locality, pr.city, pr.state].filter(Boolean).join(', ');
-      return { name: pr.name || addr.split(',')[0] || q, address: addr, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], src: 'Map' };
-    }).filter(x => isFinite(x.lat) && isFinite(x.lng));
-  } catch(e){ return []; }
-}
-function renderSugg(list, note){
-  gResults = list;
-  $('gSugg').innerHTML = list.map((x, i) =>
-    '<li data-i="' + i + '"><span class="pin">📍</span><span><b>' + esc(x.name) + '</b><small>' + esc(x.address || '') +
-    (gBias ? ' · ' + fmtDist(haversine(gBias.lat, gBias.lng, x.lat, x.lng)) + ' away' : '') + '</small></span></li>').join('');
-  $('gSugg').hidden = !list.length;
-  $('gSuggNote').textContent = note || '';
-  $('gSuggNote').hidden = !note;
-}
-async function runSearch(){
-  const q = $('gSearch').value.trim();
-  if (q.length < 3){ renderSugg([], ''); return; }
-  const seq = ++gSeq;
-  renderSugg(gResults, 'Searching…');
-  const both = await Promise.all([
-    call('searchGym', session.empId, session.pin, q, gBias ? gBias.lat : '', gBias ? gBias.lng : '').catch(() => []),
-    photonSearch(q)
-  ]);
-  if (seq !== gSeq) return;
-  const list = [];
-  both[0].concat(both[1]).forEach(x => {
-    if (!list.some(y => haversine(y.lat, y.lng, x.lat, x.lng) < 40)) list.push(x);
-  });
-  if (gBias) list.sort((a, b) => haversine(gBias.lat, gBias.lng, a.lat, a.lng) - haversine(gBias.lat, gBias.lng, b.lat, b.lng));
-  renderSugg(list.slice(0, 8), list.length ? 'Tap your gym:' : 'No match. Add the area and city (e.g. Iron Gym Dharampeth Nagpur), or use option 1 at the gym.');
-}
-$('gSearch').addEventListener('focus', getBias);
-$('gSearch').addEventListener('input', () => {
-  resetGymConfirm(); clearTimeout(gTimer); gTimer = setTimeout(runSearch, 600);
-});
-$('gSugg').addEventListener('click', ev => {
-  const li = ev.target.closest('li'); if (!li) return;
-  const x = gResults[Number(li.dataset.i)]; if (!x) return;
-  if ($('gName').value.trim().length < 3) $('gName').value = x.name;
-  msg($('gMsg'), '', 'err');
-  showGymConfirm({ mode: 'search', lat: x.lat, lng: x.lng, placeName: x.name, address: x.address });
-});
-
 $('gFind').addEventListener('click', async () => {
   msg($('gMsg'), '', 'err'); resetGymConfirm();
   const link = $('gLink').value.trim();
@@ -1127,7 +1056,8 @@ $('gFind').addEventListener('click', async () => {
   busy($('gFind'), true, ' Reading link…');
   try {
     const r = await call('previewGymLink', session.empId, session.pin, link);
-    showGymConfirm({ mode: 'link', link: link, lat: r.lat, lng: r.lng, precise: r.precise, byName: r.byName, placeName: r.placeName });
+    showGymConfirm(r.pending ? { mode: 'link', link: link, pending: true }
+      : { mode: 'link', link: link, lat: r.lat, lng: r.lng, precise: r.precise, byName: r.byName, placeName: r.placeName });
   } catch(e){ msg($('gMsg'), e, 'err'); }
   busy($('gFind'), false);
 });
@@ -1140,9 +1070,7 @@ $('gymCard').addEventListener('submit', async ev => {
   try {
     const loc = pendingGym.mode === 'here'
       ? { mode: 'here', lat: pendingGym.lat, lng: pendingGym.lng, acc: pendingGym.acc }
-      : pendingGym.mode === 'search'
-        ? { mode: 'search', lat: pendingGym.lat, lng: pendingGym.lng }
-        : { mode: 'link', link: pendingGym.link };
+      : { mode: 'link', link: pendingGym.link };
     me = await call('registerGym', session.empId, session.pin, $('gName').value.trim(), loc);
     resetGymConfirm(); renderHome(); msg($('upMsg'), me.message, 'ok');
   } catch(e){ msg($('gMsg'), e, 'err'); }
@@ -1181,7 +1109,7 @@ function renderReport(r){
     <tr class="emp">
       <td class="c-name"><strong>${esc(x.name)}</strong><div class="muted">${esc(x.id)}</div>
         <div class="muted">${x.gymSet
-          ? `Gym: ${esc(x.gymName || '—')} · <a class="link" style="font-size:13px" href="${MAPS_URL}${x.gymLat},${x.gymLng}" target="_blank" rel="noopener">Map</a>${x.gymBy ? ' · set by ' + esc(x.gymBy) : ''}`
+          ? `Gym: ${esc(x.gymName || '—')} · <a class="link" style="font-size:13px" href="${x.gymPending ? esc(x.gymLink) : MAPS_URL + x.gymLat + ',' + x.gymLng}" target="_blank" rel="noopener">Map</a>${x.gymBy ? ' · set by ' + esc(x.gymBy) : ''}`
           : '<span style="color:var(--hb-warm-text)">Gym not registered</span>'}</div>
         ${x.flagged ? `<span class="chip bad" style="margin-top:4px">⚠ ${x.flagged} suspicious</span>` : ''}</td>
       <td class="c-dept">${esc(x.dept)}</td>
