@@ -1026,8 +1026,6 @@ function showGymConfirm(g){
   let note = '';
   if (g.mode === 'here') note = 'Your current location' + (g.acc ? ' (accuracy ' + Math.round(g.acc) + ' m)' : '') + '.';
   else if (g.precise) note = 'Location read from your link.';
-  else if (g.byName) note = 'Found by the gym name and address in your link: ' + (g.placeName || '') +
-    '. Tap Open in Google Maps to check the pin is exactly on your gym. If it is not, use your current location at the gym instead.';
   else note = 'Warning: this link only gives an approximate map area, not the exact gym. Check the map carefully, or use your current location at the gym instead.';
   $('gFound').innerHTML = esc(note) + '<br><span style="font-variant-numeric:tabular-nums">' + g.lat.toFixed(6) + ', ' + g.lng.toFixed(6) + '</span> · ' +
     '<a class="link" href="' + url + '" target="_blank" rel="noopener">Open in Google Maps to check</a>';
@@ -1057,7 +1055,7 @@ $('gFind').addEventListener('click', async () => {
   try {
     const r = await call('previewGymLink', session.empId, session.pin, link);
     showGymConfirm(r.pending ? { mode: 'link', link: link, pending: true }
-      : { mode: 'link', link: link, lat: r.lat, lng: r.lng, precise: r.precise, byName: r.byName, placeName: r.placeName });
+      : { mode: 'link', link: link, lat: r.lat, lng: r.lng, precise: r.precise });
   } catch(e){ msg($('gMsg'), e, 'err'); }
   busy($('gFind'), false);
 });
