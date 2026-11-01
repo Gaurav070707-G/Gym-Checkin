@@ -581,9 +581,8 @@ function renderHome(){
   $('gymHint').textContent = `The photo must be taken today, within ${me.radius} m of ${me.gymName || 'your gym'}.`;
   $('gymLine').hidden = !me.gymSet;
   if (me.gymSet) $('gymLine').innerHTML = `My gym: <strong>${esc(me.gymName || 'Registered gym')}</strong>
-    <a class="link" href="${me.gymPending ? esc(me.gymLink) : MAPS_URL + me.gymLat + ',' + me.gymLng}" target="_blank" rel="noopener">Map</a>
+    <a class="link" href="${MAPS_URL}${me.gymLat},${me.gymLng}" target="_blank" rel="noopener">Map</a>
     <span class="muted">(contact HR to change)</span>`;
-  if (me.gymPending) $('gymHint').textContent = 'Take your first check-in photo at ' + (me.gymName || 'your gym') + '. Its location will be saved as your gym location.';
   renderCalendar();
 }
 let lastPhoto = null;   /* the photo just submitted, shown in the success card this session */
@@ -848,22 +847,24 @@ async function handleFile(file, mode){
       t: source === 'EXIF' ? 'Location saved in the photo' : 'Photo has no location inside it, so your current location is used',
       d: loc.lat.toFixed(6) + ', ' + loc.lng.toFixed(6) + accTxt + ' · <a class="link" href="' + link + '" target="_blank" rel="noopener">View map</a>', html:true});
 
-    /* 3) Gym distance */
-    if (me.gymPending){
-      checks.push({pass:true, t:'First check-in', d:'This photo location will be saved as your gym location.'});
-    } else if (me.gymSet){
-      const dist = haversine(loc.lat, loc.lng, me.gymLat, me.gymLng);
-      if (dist > me.radius){
+    /* 3) Gym distance: the photo location AND the phone's live location must both be near the gym.
+       (A photo's own GPS can be old or wrong, so it is never trusted alone.) */
+    if (me.gymSet){
+      const dPhoto = haversine(loc.lat, loc.lng, me.gymLat, me.gymLng);
+      const dLive = live ? haversine(live.lat, live.lng, me.gymLat, me.gymLng) : null;
+      const slack = live && live.acc ? Math.min(live.acc, 1000) : 0;
+      if (dPhoto > me.radius){
         ok = false;
-        checks.push({pass:false, t:'Too far from gym', d: source === 'EXIF'
-          ? 'This photo was taken ' + fmtDist(dist) + ' from your gym. The limit is ' + me.radius + ' m.'
-          : 'You are ' + fmtDist(dist) + ' from your gym right now. Because this photo has no location inside it, it can only be uploaded while you are at the gym. ' +
-            'Next time, upload it at the gym right after taking it, or keep your phone camera\'s location tag ON so you can upload later in the day.'});
+        checks.push({pass:false, t:'Too far from gym', d: 'This photo was taken ' + fmtDist(dPhoto) + ' from your gym. The limit is ' + me.radius + ' m.'});
+      } else if (dLive !== null && dLive > me.radius + slack){
+        ok = false;
+        checks.push({pass:false, t:'Too far from gym', d: 'Your phone is ' + fmtDist(dLive) + ' from your gym right now. Take the photo inside your gym.' +
+          (live.acc > 1000 ? approxHelp() : '')});
       } else {
-        checks.push({pass:true, t:'At your gym', d: fmtDist(dist) + ' from your gym'});
+        checks.push({pass:true, t:'At your gym', d: fmtDist(Math.max(dPhoto, dLive || 0)) + ' from your gym'});
       }
     } else {
-      ok = false; checks.push({pass:false, t:'Gym not registered', d:'Please register your gym first.'});
+      ok = false; checks.push({pass:false, t:'Gym not registered', d:'Please register your gym first: go to your gym and tap Use my current location.'});
     }
   }
 
@@ -973,7 +974,7 @@ async function checkLocation(){
   try {
     const p = await deviceLocation();
     const acc = p.acc ? ' (GPS accuracy ±' + Math.round(p.acc) + ' m)' : '';
-    const dist = (me && me.gymSet && !me.gymPending) ? haversine(p.lat, p.lng, me.gymLat, me.gymLng) : null;
+    const dist = (me && me.gymSet) ? haversine(p.lat, p.lng, me.gymLat, me.gymLng) : null;
     if (dist !== null && dist > me.radius){
       box.className = 'locbox bad';
       $('locText').textContent = 'Location is on' + acc + ', but you are ' + fmtDist(dist) + ' away from ' + (me.gymName || 'your gym') +
@@ -1076,8 +1077,8 @@ function renderReport(r){
     <tr class="emp">
       <td class="c-name"><strong>${esc(x.name)}</strong><div class="muted">${esc(x.id)}</div>
         <div class="muted">${x.gymSet
-          ? `Gym: ${esc(x.gymName || '—')} · <a class="link" style="font-size:13px" href="${x.gymPending ? esc(x.gymLink) : MAPS_URL + x.gymLat + ',' + x.gymLng}" target="_blank" rel="noopener">Map</a>${x.gymBy ? ' · set by ' + esc(x.gymBy) : ''}`
-          : '<span style="color:var(--hb-warm-text)">Gym not registered</span>'}</div>
+          ? `Gym: ${esc(x.gymName || '—')} · <a class="link" style="font-size:13px" href="${MAPS_URL}${x.gymLat},${x.gymLng}" target="_blank" rel="noopener">Map</a>${x.gymBy ? ' · set by ' + esc(x.gymBy) : ''}`
+          : (x.gymPending ? '<span style="color:var(--hb-warm-text)">Gym needs re-registration at the gym</span>' : '<span style="color:var(--hb-warm-text)">Gym not registered</span>')}</div>
         ${x.flagged ? `<span class="chip bad" style="margin-top:4px">⚠ ${x.flagged} suspicious</span>` : ''}</td>
       <td class="c-dept">${esc(x.dept)}</td>
       <td class="num c-days">${x.days}</td>
