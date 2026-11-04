@@ -190,6 +190,18 @@ input[type=file]{display:none}
 .locbox.bad{background:var(--hb-warm-soft);color:var(--hb-warm-text);border:1px solid var(--hb-warm)}
 #locText{white-space:pre-line}
 .btn.off{opacity:.45;pointer-events:none}
+.camalt{text-align:center;font-size:13px;color:var(--hb-text-2)}
+.camalt button{background:none;border:0;padding:4px;color:var(--hb-link,#007ac8);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+.camalt.off{opacity:.45;pointer-events:none}
+.cam-ov{position:fixed;inset:0;z-index:1000;background:#000;display:flex;flex-direction:column}
+.cam-ov[hidden]{display:none}
+.cam-ov video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+.cam-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px calc(20px + env(safe-area-inset-bottom))}
+.cam-bar .btn{min-width:88px}
+.cam-shot{width:76px;height:76px;flex:none;border-radius:50%;border:5px solid #fff;background:rgba(255,255,255,.3);cursor:pointer}
+.cam-shot:active{background:#fff}
+.cam-msg{color:#fff;text-align:center;padding:12px 20px;font-size:14px;line-height:20px}
+.cam-msg:empty{display:none}
 .gal{display:flex;flex-direction:column;gap:4px;text-align:center}
 .gal .link{cursor:pointer;text-decoration:underline}
 .opt{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--hb-border);border-radius:12px}
@@ -357,6 +369,10 @@ input[type=file]{display:none}
     <div class="btn-row" id="camRow">
       <label class="btn btn-cta btn-big" for="camInput" id="camBtn"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>Take photo</span></label>
     </div>
+    <div class="camalt" id="camAlt">
+      <span id="camAltText">Camera app closing or showing "low memory"?</span>
+      <button type="button" id="inCamBtn">Use in-page camera</button>
+    </div>
     <input type="file" id="camInput" accept="image/*" capture="environment">
     <div class="tipbox" id="offlineTip">
       <div class="tip-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.7 11.1A10.9 10.9 0 0 1 19 12.6"/><path d="M5 12.6a10.9 10.9 0 0 1 5.2-2.5"/><path d="M10.7 5.1A16 16 0 0 1 22.6 9"/><path d="M1.4 9a16 16 0 0 1 4.4-2.7"/><path d="M8.5 16.1a5 5 0 0 1 7 0"/><line x1="12" y1="20" x2="12" y2="20"/></svg></div>
@@ -376,6 +392,16 @@ input[type=file]{display:none}
       </div>
     </div>
   </section>
+
+  <div class="cam-ov" id="camOv" hidden>
+    <video id="camVid" playsinline autoplay muted></video>
+    <div class="cam-msg" id="camMsg"></div>
+    <div class="cam-bar">
+      <button class="btn btn-ghost" id="camCancel" type="button">Cancel</button>
+      <button class="cam-shot" id="camShot" type="button" aria-label="Take photo"></button>
+      <button class="btn btn-ghost" id="camFlip" type="button">Flip</button>
+    </div>
+  </div>
 
   <section class="card">
     <div class="topbar">
@@ -566,7 +592,7 @@ function renderHome(){
   $('gymCard').hidden = me.gymSet;
   $('gymCard').querySelector('p.muted').textContent = `Your check-in photos must be taken within ${me.radius} m of this gym. If you change gyms later, HR/admin will update it.`;
   $('uploadCard').hidden = me.todayDone || !me.gymSet;
-  $('camRow').hidden = !IS_PHONE; $('offlineTip').hidden = !IS_PHONE;
+  $('camRow').hidden = !IS_PHONE; $('camAlt').hidden = !IS_PHONE; $('offlineTip').hidden = !IS_PHONE;
   $('ruleRadius').textContent = me.radius || 500;
   const q = getOffline();
   const hasQueued = !!(q && q.empId === me.id && q.date === todayIST() && !me.todayDone);
@@ -670,6 +696,64 @@ const IS_PHONE = (navigator.userAgentData && navigator.userAgentData.mobile) ||
   (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 $('desktopNote').hidden = IS_PHONE;
 $('camRow').hidden = !IS_PHONE;
+$('camAlt').hidden = !IS_PHONE;
+
+/* ---------- IN-PAGE CAMERA (for phones that close the browser when the camera app opens: "low memory") ---------- */
+let camStream = null, camFacing = 'environment', useInCam = false;
+try { useInCam = localStorage.getItem('gymInCam') === '1'; } catch(e){}
+function setInCamMode(on){
+  useInCam = on;
+  try { on ? localStorage.setItem('gymInCam', '1') : localStorage.removeItem('gymInCam'); } catch(e){}
+  $('camAltText').textContent = on ? 'Using the in-page camera.' : 'Camera app closing or showing "low memory"?';
+  $('inCamBtn').textContent = on ? 'Use phone camera app instead' : 'Use in-page camera';
+}
+function stopCam(){ if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; } }
+function closeCam(){ stopCam(); $('camVid').srcObject = null; $('camOv').hidden = true; }
+async function startCam(){
+  stopCam(); $('camMsg').textContent = 'Opening camera…';
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ audio:false,
+      video:{ facingMode:{ ideal:camFacing }, width:{ ideal:1920 }, height:{ ideal:1080 } } });
+    $('camVid').srcObject = camStream;
+    $('camVid').style.transform = camFacing === 'user' ? 'scaleX(-1)' : '';
+    $('camMsg').textContent = '';
+  } catch(e){
+    $('camMsg').textContent = (e && e.name === 'NotAllowedError')
+      ? 'Camera permission is blocked. Tap the icon on the left of the web address > Permissions > Camera > Allow, then tap Flip or open the camera again.'
+      : 'Could not open the camera (' + ((e && (e.message || e.name)) || e) + '). Close other apps and try again.';
+  }
+}
+async function openInCam(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    return msg($('upMsg'), 'The in-page camera does not work in this browser. Please open the link in Chrome (Android) or Safari (iPhone).', 'err');
+  }
+  $('camOv').hidden = false;
+  await startCam();
+}
+$('inCamBtn').addEventListener('click', () => {
+  if (useInCam){ setInCamMode(false); return; }
+  setInCamMode(true); openInCam();
+});
+$('camCancel').addEventListener('click', closeCam);
+$('camFlip').addEventListener('click', () => { camFacing = camFacing === 'environment' ? 'user' : 'environment'; startCam(); });
+$('camShot').addEventListener('click', () => {
+  const v = $('camVid');
+  if (!v.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  c.toBlob(b => {
+    closeCam();
+    if (!b) return msg($('upMsg'), 'Could not capture the photo. Please try again.', 'err');
+    const now = Date.now();
+    handleFile(new File([b], 'gym-' + now + '.jpg', { type:'image/jpeg', lastModified: now }), 'camera');
+  }, 'image/jpeg', 0.92);
+});
+/* When the in-page camera is chosen, Take photo and Retake open it instead of the phone camera app */
+['camBtn', 'retakeBtn'].forEach(id => $(id).addEventListener('click', ev => {
+  if (useInCam){ ev.preventDefault(); openInCam(); }
+}));
+setInCamMode(useInCam);
 
 function resetUpload(){ pending = null; $('preview').hidden = true; msg($('upMsg'),'','ok'); }
 
@@ -970,7 +1054,7 @@ async function checkLocation(){
   box.hidden = false; box.className = 'locbox';
   $('locText').textContent = 'Checking your location… If your phone asks, tap Allow.';
   $('locRetry').hidden = true;
-  $('camBtn').classList.add('off');
+  $('camBtn').classList.add('off'); $('camAlt').classList.add('off');
   try {
     const p = await deviceLocation();
     const acc = p.acc ? ' (GPS accuracy ±' + Math.round(p.acc) + ' m)' : '';
@@ -985,7 +1069,7 @@ async function checkLocation(){
       box.className = 'locbox ok';
       $('locText').textContent = '✓ Location is on' + acc + (dist !== null ? '. You are ' + fmtDist(dist) + ' from your gym' : '') + '. You can take your photo.';
     }
-    $('camBtn').classList.remove('off');
+    $('camBtn').classList.remove('off'); $('camAlt').classList.remove('off');
   } catch(e){
     box.className = 'locbox bad';
     $('locText').textContent = e;
