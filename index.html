@@ -810,13 +810,33 @@ function getPos(high, timeout){
   return new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej,
     { enableHighAccuracy:high, timeout:timeout, maximumAge:0 }));
 }
-async function deviceLocation(){
+/* Watches the GPS for up to maxMs and keeps the most accurate reading. Indoors (gyms) the first
+   reading is often a rough Wi-Fi/mobile-network guess (1-2 km); a few seconds later GPS improves it. */
+function watchBest(maxMs, goodAcc, onProgress){
+  return new Promise((res, rej) => {
+    let best = null, done = false, id = null;
+    const finish = err => {
+      if (done) return; done = true;
+      if (id !== null) navigator.geolocation.clearWatch(id);
+      clearTimeout(timer);
+      best ? res(best) : rej(err || { code: 3 });
+    };
+    const timer = setTimeout(() => finish(null), maxMs);
+    id = navigator.geolocation.watchPosition(p => {
+      if (!best || p.coords.accuracy < best.coords.accuracy) best = p;
+      if (onProgress) onProgress(Math.round(best.coords.accuracy));
+      if (best.coords.accuracy <= goodAcc) finish(null);
+    }, err => { if (err && err.code === 1) finish(err); },
+    { enableHighAccuracy:true, timeout:maxMs, maximumAge:0 });
+  });
+}
+async function deviceLocation(onProgress){
   if (!navigator.geolocation) throw 'This browser does not support location. Please open the link in ' + (IS_IOS ? 'Safari.' : 'Chrome.');
   let p;
-  try { p = await getPos(true, 15000); }
+  try { p = await watchBest(20000, 50, onProgress); }
   catch(err){
     if (err && err.code === 1) throw permissionHelp();
-    /* GPS was slow or unavailable: try once more with normal accuracy (Wi-Fi / mobile network). */
+    /* GPS gave nothing at all: try once more with normal accuracy (Wi-Fi / mobile network). */
     try { p = await getPos(false, 15000); }
     catch(err2){
       if (err2 && err2.code === 1) throw permissionHelp();
@@ -830,7 +850,8 @@ async function deviceLocation(){
 function approxHelp(){
   return IS_IOS
     ? ' Your location looks approximate. Turn ON Precise Location: Settings > Privacy & Security > Location Services > ' + (browserName() === 'Safari' ? 'Safari Websites' : browserName()) + ' > Precise Location.'
-    : ' Your location looks approximate. Turn ON Use precise location: Settings > Apps > ' + browserName() + ' > Permissions > Location.';
+    : ' Turn ON Use precise location: phone Settings > Apps > ' + browserName() + ' > Permissions > Location > Use precise location. ' +
+      'Also check the site: tap the icon on the left of the web address > Permissions > Location, and choose Precise (not Approximate).';
 }
 /* Camera make/model saved inside the photo, e.g. "samsung SM-S918B" */
 function cameraName(t){
@@ -914,7 +935,7 @@ async function handleFile(file, mode){
   const exifLoc = exifGps(tags);
   let live = null, liveErr = '';
   msg($('upMsg'), 'Getting your phone\'s location…', 'ok');
-  try { live = await deviceLocation(); } catch(e){ liveErr = e; }
+  try { live = await deviceLocation(a => msg($('upMsg'), 'Getting your phone\'s location… ±' + a + ' m', 'ok')); } catch(e){ liveErr = e; }
   const loc = fromGallery ? exifLoc : (exifLoc || live), source = exifLoc ? 'EXIF' : 'DEVICE';
   if (!loc && fromGallery){
     checks.push({pass:true, t:'Location not saved in this photo',
@@ -1056,7 +1077,7 @@ async function checkLocation(){
   $('locRetry').hidden = true;
   $('camBtn').classList.add('off'); $('camAlt').classList.add('off');
   try {
-    const p = await deviceLocation();
+    const p = await deviceLocation(a => { $('locText').textContent = 'Checking your location… ±' + a + ' m'; });
     const acc = p.acc ? ' (GPS accuracy ±' + Math.round(p.acc) + ' m)' : '';
     const dist = (me && me.gymSet) ? haversine(p.lat, p.lng, me.gymLat, me.gymLng) : null;
     if (dist !== null && dist > me.radius){
@@ -1107,7 +1128,10 @@ $('gHere').addEventListener('click', async () => {
   msg($('gMsg'), '', 'err'); resetGymConfirm();
   busy($('gHere'), true, ' Getting your location…');
   try {
-    const p = await deviceLocation();
+    const p = await deviceLocation(acc => { $('gHere').innerHTML = '<span class="spinner"></span> Getting exact location… ±' + acc + ' m'; });
+    if (p.acc && p.acc >= 1000) throw 'Your phone gave only a rough location (about ' + Math.round(p.acc) + ' m), not the exact one. Please check:' +
+      approxHelp() + (IS_IOS ? '' : ' Also turn ON Google Location Accuracy (Settings > Location > Location services > Google Location Accuracy), turn OFF Battery saver, and keep Wi-Fi ON.') +
+      ' Then stand near the gym entrance or a window and tap Use my current location again.';
     if (p.acc && p.acc > 150) throw 'Your location is not accurate enough (' + Math.round(p.acc) + ' m). Step outside or near a window and try again.';
     showGymConfirm({ mode: 'here', lat: p.lat, lng: p.lng, acc: p.acc });
   } catch(e){ msg($('gMsg'), e, 'err'); }
